@@ -1,0 +1,207 @@
+/* ==========================================================================
+   1. PAGE WRAPPER & CONTAINER
+   ========================================================================== */
+
+.master-ledger-page {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Dark sidebar background color from SystemInit */
+  background-color: var(--bg-sidebar, #101820);
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.master-ledger-container {
+  width: 100%;
+  max-width: 580px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  /* Elevated shadow to pop against the dark background */
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   2. OPTIONAL HEADER (For when un-commented)
+   ========================================================================== */
+.init-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-sidebar, #101820);
+  color: var(--text-light, #f8fafc);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.init-header-logo {
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.init-header-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.init-wordmark {
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+}
+
+.init-wordmark-sub {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #64748b);
+  font-weight: 700;
+}
+
+.init-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.05em;
+  margin-left: auto;
+}
+
+/* ==========================================================================
+   3. MAIN CONTENT AREA
+   ========================================================================== */
+.master-ledger-content {
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Icon Badge */
+.icon-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: var(--bg-app, #f4f6f8);
+  border: 1px solid var(--border-color, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-main, #1e293b);
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+}
+
+/* Typography */
+.master-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--text-main, #1e293b);
+  margin-bottom: 1rem;
+}
+
+.master-description {
+  font-size: 0.95rem;
+  color: var(--text-muted, #64748b);
+  line-height: 1.6;
+  max-width: 440px;
+  margin-bottom: 2rem;
+}
+
+.master-description strong {
+  color: var(--text-main, #1e293b);
+  font-weight: 600;
+}
+
+/* Action Button */
+.init-dashboard-btn {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.85rem 1.5rem;
+  background-color: #101820;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.2s ease);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+}
+
+.init-dashboard-btn:hover {
+  background-color: #1c2733;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+.init-dashboard-btn:active {
+  transform: translateY(0);
+}
+
+/* Sub-note */
+.master-note {
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #64748b);
+  max-width: 380px;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   4. MOBILE RESPONSIVENESS
+   ========================================================================== */
+@media (max-width: 640px) {
+  .master-ledger-page {
+    padding: 1rem;
+  }
+
+  .master-ledger-content {
+    padding: 1.75rem 1.25rem;
+  }
+
+  .icon-circle {
+    width: 52px;
+    height: 52px;
+    font-size: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .master-title {
+    font-size: 1.1rem;
+  }
+
+  .master-description {
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .init-dashboard-btn {
+    max-width: 100%;
+    padding: 0.8rem 1rem;
+  }
+
+  .init-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .init-header-meta {
+    margin-left: 0;
+  }
+}

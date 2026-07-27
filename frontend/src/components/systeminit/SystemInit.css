@@ -1,0 +1,587 @@
+/* ==========================================================================
+   SYSTEM INITIALIZATION - INDUSTRIAL UTILITY THEME
+   ========================================================================== */
+
+:root {
+  --init-bg: #0d1117;
+  --init-surface: #161b22;
+  --init-surface-border: #30363d;
+  --init-surface-hover: #21262d;
+  
+  --init-text-main: #f0f6fc;
+  --init-text-muted: #8b949e;
+  --init-text-dim: #484f58;
+
+  --init-accent: #388bfd;
+  --init-accent-hover: #58a6ff;
+  --init-accent-active: #1f6beb;
+
+  --init-success: #238636;
+  --init-success-hover: #2ea043;
+  
+  --init-danger: #da3633;
+  --init-danger-hover: #f85149;
+
+  --init-radius: 6px;
+  --init-transition: 0.15s ease-in-out;
+  --init-font-mono: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+}
+
+/* Reset / Base Wrapper */
+.init-page {
+  min-height: 100vh;
+  background-color: var(--init-bg);
+  color: var(--init-text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.init-body {
+  width: 100%;
+  max-width: 980px;
+  background: var(--init-surface);
+  border: 1px solid var(--init-surface-border);
+  border-radius: var(--init-radius);
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   VERTICAL STEP RAIL (Desktop)
+   -------------------------------------------------------------------------- */
+.init-rail {
+  background: #0d1117;
+  border-right: 1px solid var(--init-surface-border);
+  padding: 2rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.init-rail-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  background: transparent;
+  border: none;
+  padding: 0.75rem 0.5rem;
+  border-radius: var(--init-radius);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--init-transition);
+  width: 100%;
+  color: inherit;
+}
+
+.init-rail-step:disabled {
+  cursor: not-allowed;
+}
+
+.init-rail-step:not(:disabled):hover {
+  background: var(--init-surface-hover);
+}
+
+.init-rail-index {
+  font-family: var(--init-font-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--init-surface-border);
+  background: var(--init-surface);
+  color: var(--init-text-muted);
+  flex-shrink: 0;
+}
+
+/* Rail States */
+.init-rail-step--active .init-rail-index {
+  border-color: var(--init-accent);
+  background: var(--init-accent);
+  color: #ffffff;
+}
+
+.init-rail-step--done .init-rail-index {
+  border-color: var(--init-success);
+  background: rgba(35, 134, 54, 0.15);
+  color: #3fb950;
+}
+
+.init-rail-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.init-rail-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--init-text-muted);
+  line-height: 1.2;
+}
+
+.init-rail-step--active .init-rail-label {
+  color: var(--init-text-main);
+}
+
+.init-rail-step--done .init-rail-label {
+  color: var(--init-text-main);
+}
+
+.init-rail-hint {
+  font-size: 0.75rem;
+  color: var(--init-text-dim);
+}
+
+.init-rail-connector {
+  width: 1px;
+  height: 20px;
+  background: var(--init-surface-border);
+  margin-left: 20px; /* Aligns vertically with step index center */
+  margin-top: -2px;
+  margin-bottom: -2px;
+}
+
+/* --------------------------------------------------------------------------
+   MAIN PANEL
+   -------------------------------------------------------------------------- */
+.init-panel {
+  padding: 2.25rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.init-panel-head {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--init-surface-border);
+  padding-bottom: 1.25rem;
+}
+
+.init-panel-eyebrow {
+  font-family: var(--init-font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--init-accent);
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.init-panel-title {
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--init-text-main);
+  margin: 0 0 0.35rem 0;
+  letter-spacing: -0.01em;
+}
+
+.init-panel-sub {
+  font-size: 0.875rem;
+  color: var(--init-text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* --------------------------------------------------------------------------
+   FORM FIELDS & INPUTS
+   -------------------------------------------------------------------------- */
+.init-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex-grow: 1;
+}
+
+.init-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.init-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.init-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--init-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.init-input,
+.init-select,
+.init-textarea {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid var(--init-surface-border);
+  border-radius: var(--init-radius);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--init-text-main);
+  box-sizing: border-box;
+  transition: border-color var(--init-transition);
+}
+
+.init-input:focus,
+.init-select:focus,
+.init-textarea:focus {
+  outline: none;
+  border-color: var(--init-accent);
+  box-shadow: 0 0 0 1px var(--init-accent);
+}
+
+.init-input::placeholder,
+.init-textarea::placeholder {
+  color: var(--init-text-dim);
+}
+
+.init-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%8b949e' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.init-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* --------------------------------------------------------------------------
+   STEP 2: CONTACTS LIST
+   -------------------------------------------------------------------------- */
+.contacts-hint-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.contacts-hint-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--init-text-muted);
+}
+
+.contacts-info-icon {
+  background: none;
+  border: none;
+  color: var(--init-text-muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+.contacts-info-icon:hover {
+  color: var(--init-accent);
+}
+
+.contacts-info-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  margin-top: 0.35rem;
+  width: 280px;
+  background: #21262d;
+  border: 1px solid var(--init-surface-border);
+  border-radius: var(--init-radius);
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--init-text-main);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.contacts-info-tooltip p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.contact-row {
+  display: flex;
+  gap: 0.5rem;
+  background: #0d1117;
+  border: 1px solid var(--init-surface-border);
+  border-radius: var(--init-radius);
+  padding: 0.75rem;
+  align-items: center;
+}
+
+.contact-number {
+  font-family: var(--init-font-mono);
+  font-size: 0.75rem;
+  color: var(--init-text-muted);
+  background: var(--init-surface);
+  border: 1px solid var(--init-surface-border);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.contact-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  flex-grow: 1;
+}
+
+.remove-contact {
+  background: transparent;
+  border: none;
+  color: var(--init-text-dim);
+  cursor: pointer;
+  padding: 0.35rem;
+  font-size: 0.875rem;
+  border-radius: 4px;
+  transition: color var(--init-transition);
+}
+
+.remove-contact:hover {
+  color: var(--init-danger);
+  background: rgba(218, 54, 51, 0.1);
+}
+
+.add-contact-btn {
+  background: transparent;
+  border: 1px dashed var(--init-surface-border);
+  color: var(--init-text-muted);
+  border-radius: var(--init-radius);
+  padding: 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--init-font-mono);
+  cursor: pointer;
+  transition: all var(--init-transition);
+}
+
+.add-contact-btn:hover {
+  border-color: var(--init-accent);
+  color: var(--init-accent);
+  background: rgba(56, 139, 253, 0.05);
+}
+
+/* --------------------------------------------------------------------------
+   STEP 3: COMPLIANCE CHECKBOXES
+   -------------------------------------------------------------------------- */
+.init-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.init-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: #0d1117;
+  border: 1px solid var(--init-surface-border);
+  border-radius: var(--init-radius);
+  padding: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.init-checkbox-row input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.init-checkbox-box {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--init-surface-border);
+  border-radius: 4px;
+  background: var(--init-surface);
+  margin-top: 2px;
+  flex-shrink: 0;
+  position: relative;
+  transition: all var(--init-transition);
+}
+
+.init-checkbox-row input[type="checkbox"]:checked ~ .init-checkbox-box {
+  background: var(--init-accent);
+  border-color: var(--init-accent);
+}
+
+.init-checkbox-row input[type="checkbox"]:checked ~ .init-checkbox-box::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.init-checkbox-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.init-checkbox-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--init-text-main);
+}
+
+.init-checkbox-desc {
+  font-size: 0.75rem;
+  color: var(--init-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   ACTIONS / FOOTER
+   -------------------------------------------------------------------------- */
+.init-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--init-surface-border);
+}
+
+.init-btn-ghost,
+.init-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: var(--init-font-mono);
+  padding: 0.625rem 1rem;
+  border-radius: var(--init-radius);
+  cursor: pointer;
+  transition: all var(--init-transition);
+}
+
+.init-btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--init-text-muted);
+}
+
+.init-btn-ghost:hover:not(:disabled) {
+  color: var(--init-text-main);
+  background: var(--init-surface-hover);
+}
+
+.init-btn-ghost:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.init-btn-primary {
+  background: var(--init-accent);
+  border: 1px solid var(--init-accent);
+  color: #ffffff;
+}
+
+.init-btn-primary:hover {
+  background: var(--init-accent-hover);
+  border-color: var(--init-accent-hover);
+}
+
+/* --------------------------------------------------------------------------
+   MOBILE & TABLET RESPONSIVENESS
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .init-page {
+    padding: 0;
+    align-items: flex-start;
+  }
+
+  .init-body {
+    grid-template-columns: 1fr;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    min-height: 100vh;
+  }
+
+  /* Rail turns into a horizontal top progress bar */
+  .init-rail {
+    border-right: none;
+    border-bottom: 1px solid var(--init-surface-border);
+    padding: 1rem;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .init-rail-connector {
+    display: none;
+  }
+
+  .init-rail-step {
+    padding: 0;
+    width: auto;
+    gap: 0.5rem;
+  }
+
+  .init-rail-copy {
+    display: none; /* Hide label & hints on mobile to conserve space */
+  }
+
+  .init-panel {
+    padding: 1.25rem 1rem;
+  }
+
+  .init-form-row {
+    grid-template-columns: 1fr; /* Stack inputs vertically */
+  }
+
+  .contact-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contact-fields {
+    grid-template-columns: 1fr; /* Stack contact fields */
+  }
+
+  .contact-number {
+    align-self: flex-start;
+  }
+
+  .remove-contact {
+    align-self: flex-end;
+  }
+}
