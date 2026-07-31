@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './SystemInit.css';
 import MasterLedgerInit from '../masterledgerinit/MasterLedgerInit';
+import { signup, isAuthenticated, saveProfile, addContact, addVendor } from '../../api/client';
 
 const STEPS = [
   { key: 1, label: 'Pipeline Asset Profile', hint: 'Pipeline parameters' },
@@ -25,6 +26,8 @@ const SystemInit = ({ onComplete }) => {
 
   const [formData, setFormData] = useState({
     operatorName: 'Yunoya LTD',
+    email: '',
+    password: '',
     county: 'Midland',
     location: 'Permian Basin',
     material: 'Steel',
@@ -32,7 +35,31 @@ const SystemInit = ({ onComplete }) => {
     notes: '',
     phmsa: true,
     trrc: true,
+
+    // Smart Onboarding Toggles - field names match the backend PipelineProfile
+    // model exactly, so saveProfile() below can send this object almost as-is.
+    classLocation: '',
+    hasRegulatingStations: false,
+    vaultVolumeGreater200cf: false,
+    hasControlRoom: false,
+    isOdorized: false,
+    transportsCorrosiveGas: false,
+    hasHighConsequenceAreas: false,
+    servesPublicSchools: false,
+    hasBusinessDistricts: false,
+    hasNonBusinessAssets: false,
+    isCathodicallyProtected: false,
+    hasCpRectifiers: false,
+    hasInterferenceBonds: false,
+    isBareUnprotectedSteel: false,
+    hasExposedOnshoreSteel: false,
+    isOffshore: false,
+    hasWeldedPiping: false,
+    welderRequalPath: '',
   });
+
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [contacts, setContacts] = useState([
     {
@@ -105,7 +132,27 @@ const SystemInit = ({ onComplete }) => {
     vendors,
   });
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    setSubmitError('');
+
+    // Step 1 -> 2 is where the account actually gets created, since we need
+    // a JWT before any other backend call (profile, contacts, vendors) works.
+    if (activeStep === 1 && !isAuthenticated()) {
+      if (!formData.email || !formData.password) {
+        setSubmitError('Email and password are required to create your account.');
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        await signup({ companyName: formData.operatorName, email: formData.email, password: formData.password, county: formData.county, location: formData.location });
+      } catch (err) {
+        setSubmitError(err.message);
+        setIsSubmitting(false);
+        return;
+      }
+      setIsSubmitting(false);
+    }
+
     if (activeStep < 4) {
       setActiveStep(activeStep + 1);
     } else if (onComplete) {
@@ -126,6 +173,53 @@ const SystemInit = ({ onComplete }) => {
       setActiveStep(activeStep + 1);
     } else if (onComplete) {
       onComplete(buildFinalData());
+    }
+  };
+
+  const handleFinalizeSetup = async () => {
+    setSubmitError('');
+    setIsSubmitting(true);
+    try {
+      await saveProfile({
+        assetType: formData.type,
+        pipeMaterial: formData.material,
+        classLocation: formData.classLocation ? Number(formData.classLocation) : null,
+        hasRegulatingStations: formData.hasRegulatingStations,
+        vaultVolumeGreater200cf: formData.vaultVolumeGreater200cf,
+        hasControlRoom: formData.hasControlRoom,
+        isOdorized: formData.isOdorized,
+        transportsCorrosiveGas: formData.transportsCorrosiveGas,
+        hasHighConsequenceAreas: formData.hasHighConsequenceAreas,
+        servesPublicSchools: formData.servesPublicSchools,
+        hasBusinessDistricts: formData.hasBusinessDistricts,
+        hasNonBusinessAssets: formData.hasNonBusinessAssets,
+        isCathodicallyProtected: formData.isCathodicallyProtected,
+        hasCpRectifiers: formData.hasCpRectifiers,
+        hasInterferenceBonds: formData.hasInterferenceBonds,
+        isBareUnprotectedSteel: formData.isBareUnprotectedSteel,
+        hasExposedOnshoreSteel: formData.hasExposedOnshoreSteel,
+        isOffshore: formData.isOffshore,
+        hasWeldedPiping: formData.hasWeldedPiping,
+        welderRequalPath: formData.welderRequalPath || null,
+      });
+
+      // Contacts need escalationLevel = position in the list (1 = notified first)
+      for (let i = 0; i < contacts.length; i += 1) {
+        const c = contacts[i];
+        if (!c.name || !c.email) continue; // skip incomplete rows rather than fail the whole setup
+        await addContact({ fullName: c.name, title: c.role, email: c.email, phone: c.phone, escalationLevel: i + 1 });
+      }
+
+      for (const v of vendors) {
+        if (!v.companyName) continue;
+        await addVendor({ companyName: v.companyName, personnelName: v.personnelName, email: v.email, phone: v.phone, serviceScope: v.serviceScope });
+      }
+
+      setShowMasterLedger(true);
+    } catch (err) {
+      setSubmitError(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -235,6 +329,29 @@ const SystemInit = ({ onComplete }) => {
 
                   <div className="init-form-row">
                     <div className="init-form-group">
+                      <label className="init-label">Account Email</label>
+                      <input
+                        type="email"
+                        name="email"
+                        className="init-input"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                    <div className="init-form-group">
+                      <label className="init-label">Account Password</label>
+                      <input
+                        type="password"
+                        name="password"
+                        className="init-input"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="init-form-row">
+                    <div className="init-form-group">
                       <label className="init-label">Material</label>
                       <select
                         name="material"
@@ -259,6 +376,75 @@ const SystemInit = ({ onComplete }) => {
                       </select>
                     </div>
                   </div>
+
+                  <div className="init-form-group">
+                    <label className="init-label">Class Location</label>
+                    <select
+                      name="classLocation"
+                      className="init-select"
+                      value={formData.classLocation}
+                      onChange={handleInputChange}
+                    >
+                      <option value="">Select class location...</option>
+                      <option value="1">Class 1</option>
+                      <option value="2">Class 2</option>
+                      <option value="3">Class 3</option>
+                      <option value="4">Class 4</option>
+                    </select>
+                  </div>
+
+                  {/* Every remaining Smart Onboarding Toggle - these drive which
+                      of the 42 catalog requirements get suggested. See
+                      pipeline_profile_form_spec.json for the full field list. */}
+                  <div className="init-checkbox-group">
+                    {[
+                      ['hasRegulatingStations', 'Pressure limiting / regulating stations?'],
+                      ['vaultVolumeGreater200cf', 'Vaults over 200 cubic feet?'],
+                      ['hasControlRoom', 'Dedicated control room?'],
+                      ['isOdorized', 'Gas system actively odorized?'],
+                      ['transportsCorrosiveGas', 'Transports corrosive gas?'],
+                      ['hasHighConsequenceAreas', 'Passes through High Consequence Areas?'],
+                      ['servesPublicSchools', 'Serves public school piping?'],
+                      ['hasBusinessDistricts', 'Runs inside a business district?'],
+                      ['hasNonBusinessAssets', 'Has assets outside business districts?'],
+                      ['isCathodicallyProtected', 'Cathodically protected steel segments?'],
+                      ['hasCpRectifiers', 'Uses CP rectifiers / power sources?'],
+                      ['hasInterferenceBonds', 'Has critical interference bonds/diodes?'],
+                      ['isBareUnprotectedSteel', 'Any bare/unprotected legacy steel?'],
+                      ['hasExposedOnshoreSteel', 'Onshore steel exposed to atmosphere?'],
+                      ['isOffshore', 'Manages offshore structures?'],
+                      ['hasWeldedPiping', 'Requires on-site production welding?'],
+                    ].map(([field, label]) => (
+                      <label className="init-checkbox-row" key={field}>
+                        <input
+                          type="checkbox"
+                          name={field}
+                          checked={formData[field]}
+                          onChange={handleInputChange}
+                        />
+                        <span className="init-checkbox-box"></span>
+                        <span className="init-checkbox-copy">
+                          <span className="init-checkbox-title">{label}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {formData.hasWeldedPiping && (
+                    <div className="init-form-group">
+                      <label className="init-label">Welder Re-qualification Path</label>
+                      <select
+                        name="welderRequalPath"
+                        className="init-select"
+                        value={formData.welderRequalPath}
+                        onChange={handleInputChange}
+                      >
+                        <option value="">Select a path...</option>
+                        <option value="destructive_test_path">Destructive/non-destructive re-test (twice yearly)</option>
+                        <option value="annual_path">Annual re-qualification (once yearly)</option>
+                      </select>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -280,8 +466,10 @@ const SystemInit = ({ onComplete }) => {
                       <div className="contacts-info-tooltip">
                         <p>
                           Contacts are ranked by position. The{' '}
-                          <strong>first contact</strong> is top level escalation
-                          and is notified last when a requirement goes overdue.
+                          <strong>first contact</strong> is field/office level
+                          and is notified first as a requirement approaches its
+                          due date. Escalation climbs down the list toward the
+                          highest authority the closer (or more overdue) it gets.
                         </p>
                       </div>
                     )}
@@ -496,13 +684,14 @@ const SystemInit = ({ onComplete }) => {
           </div>
 
           {/* Action Buttons */}
+          {submitError && <p className="init-error" style={{ color: '#c0392b', marginBottom: 8 }}>{submitError}</p>}
           <div className="init-actions">
             {activeStep === 3 ? (
               <>
-                <button className="init-btn-ghost" onClick={handleSkip}>
+                <button className="init-btn-ghost" onClick={handleSkip} disabled={isSubmitting}>
                   SKIP VENDOR CONFIG
                 </button>
-                <button className="init-btn-primary" onClick={handleNext}>
+                <button className="init-btn-primary" onClick={handleNext} disabled={isSubmitting}>
                   COMPLIANCE FRAMEWORK →
                 </button>
               </>
@@ -511,17 +700,16 @@ const SystemInit = ({ onComplete }) => {
                 <button
                   className="init-btn-ghost"
                   onClick={handlePrev}
-                  disabled={activeStep === 1}
+                  disabled={activeStep === 1 || isSubmitting}
                 >
                   ← BACK
                 </button>
                 <button
                   className="init-btn-primary"
-                  onClick={
-                    activeStep < 4 ? handleNext : () => setShowMasterLedger(true)
-                  }
+                  onClick={activeStep < 4 ? handleNext : handleFinalizeSetup}
+                  disabled={isSubmitting}
                 >
-                  {activeStep < 4 ? 'PROCEED →' : 'INITIALIZE SYSTEM ✓'}
+                  {isSubmitting ? 'SAVING...' : activeStep < 4 ? 'PROCEED →' : 'INITIALIZE SYSTEM ✓'}
                 </button>
               </>
             )}
