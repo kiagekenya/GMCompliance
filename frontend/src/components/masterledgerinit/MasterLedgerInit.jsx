@@ -1,10 +1,13 @@
 // MasterLedgerInit.jsx
 //
-// This used to be a static confirmation screen with no real logic. It now
-// calls the real applicability engine (GET /requirements/suggested), shows
+// Calls the real applicability engine (GET /requirements/suggested), shows
 // the operator what was matched, and on "INITIALIZE CALENDAR" submits the
 // confirmed list to POST /compliance-items/confirm - which is where the
 // backend enforces that any operator-defined requirement has a value.
+//
+// Every failure path here logs full detail to console.error AND shows a
+// specific, actionable message in the UI - no generic "something went
+// wrong" text anywhere in this file.
 
 import React, { useEffect, useState } from 'react';
 import './MasterLedgerInit.css';
@@ -23,24 +26,44 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [suggested, setSuggested] = useState([]);
-  // operator-entered values for any item where requiresOperatorInput is true
   const [operatorInputs, setOperatorInputs] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchSuggestions = () => {
+    setLoading(true);
+    setError('');
     getSuggestedRequirements()
       .then((data) => {
-        if (cancelled) return;
-        setSuggested(data.suggestedItems || []);
+        const items = data.suggestedItems || [];
+        console.log(`[MasterLedgerInit] received ${items.length} suggested requirements`, items);
+
+        if (items.length === 0) {
+          // This is the exact bug reported: the applicability engine ran
+          // successfully but matched nothing. Almost always means the
+          // regulatory catalog collection is empty (forgot `npm run seed`),
+          // NOT a real "no requirements apply to your pipeline" situation -
+          // every pipeline matches at least the Core (license/fee) items.
+          console.error('[MasterLedgerInit] 0 requirements matched - this should never happen for a real pipeline profile, since Core items (licenses/fees) always apply. Most likely cause: the backend database has not been seeded.');
+          setError(
+            'No compliance requirements were matched. This almost always means the backend database has not been seeded yet - ' +
+            'ask whoever runs the backend to run "npm run seed", then click Retry below. ' +
+            '(If that\u2019s already been done, check the backend terminal log for a line starting with [requirements].)'
+          );
+        }
+
+        setSuggested(items);
         setLoading(false);
       })
       .catch((err) => {
-        if (cancelled) return;
+        console.error('[MasterLedgerInit] getSuggestedRequirements failed:', err);
         setError(err.message);
         setLoading(false);
       });
-    return () => { cancelled = true; };
+  };
+
+  useEffect(() => {
+    fetchSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getRegulationText = () => {
@@ -57,13 +80,18 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
   const handleInitialize = async () => {
     setError('');
 
-    // Enforce (client-side, mirroring the backend's own 422 check) that every
-    // operator_defined item has a value before we even submit.
+    if (suggested.length === 0) {
+      setError('Nothing to initialize - 0 requirements were matched. See the message above for how to fix this, then click Retry.');
+      return;
+    }
+
     const missing = suggested.filter(
       (item) => item.requiresOperatorInput && !operatorInputs[item.requirementId]
     );
     if (missing.length > 0) {
-      setError(`Set an interval for: ${missing.map((m) => m.title).join(', ')}`);
+      const msg = `Set an interval for: ${missing.map((m) => m.title).join(', ')}`;
+      console.warn('[MasterLedgerInit] blocked submit -', msg);
+      setError(msg);
       return;
     }
 
@@ -78,11 +106,18 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
       operatorDefinedFrequencyUnit: item.requiresOperatorInput ? 'months' : undefined,
     }));
 
+    console.log(`[MasterLedgerInit] submitting ${items.length} items to confirm`, items);
+
     try {
       await confirmComplianceItems(items);
+      console.log('[MasterLedgerInit] calendar confirmed successfully');
       onInitializeDashboard(configData);
     } catch (err) {
-      setError(err.details ? `${err.message}: ${JSON.stringify(err.details)}` : err.message);
+      console.error('[MasterLedgerInit] confirmComplianceItems failed:', err);
+      const detailText = err.details
+        ? ' — ' + err.details.map((d) => `${d.title || d.requirementId}: ${d.error}`).join('; ')
+        : '';
+      setError(`${err.message}${detailText}`);
     } finally {
       setSubmitting(false);
     }
@@ -104,7 +139,15 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
           </p>
 
           {loading && <p className="master-note">Running the applicability engine…</p>}
-          {error && <p className="master-note" style={{ color: '#c0392b' }}>{error}</p>}
+
+          {error && (
+            <div className="master-note" style={{ color: '#c0392b', textAlign: 'left', border: '1px solid #c0392b', borderRadius: 8, padding: 12, margin: '12px 0' }}>
+              <strong>⚠ {error}</strong>
+              <div style={{ marginTop: 8 }}>
+                <button className="init-btn-ghost" onClick={fetchSuggestions}>RETRY</button>
+              </div>
+            </div>
+          )}
 
           {!loading && !error && (
             <>
@@ -112,9 +155,6 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
                 {suggested.length} requirement{suggested.length === 1 ? '' : 's'} matched for {operatorName}.
               </p>
 
-              {/* Any requirement with no fixed regulatory interval needs the
-                  operator to supply one before the calendar can go live -
-                  this is the concrete "operator sets their own interval" case. */}
               {suggested.filter((i) => i.requiresOperatorInput).length > 0 && (
                 <div className="operator-defined-list" style={{ textAlign: 'left', margin: '16px 0' }}>
                   <p><strong>These requirements have no fixed regulatory interval - set your own:</strong></p>

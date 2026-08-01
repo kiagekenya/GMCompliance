@@ -1,22 +1,31 @@
-import React, { useState } from 'react';
-import './SystemInit.css';
-import MasterLedgerInit from '../masterledgerinit/MasterLedgerInit';
-import { saveProfile, updateCompany, addContact, addVendor } from '../../api/client';
+import React, { useState } from "react";
+import "./SystemInit.css";
+import MasterLedgerInit from "../masterledgerinit/MasterLedgerInit";
+import {
+  saveProfile,
+  updateCompany,
+  addContact,
+  addVendor,
+} from "../../api/client";
 
 const STEPS = [
-  { key: 1, label: 'Pipeline Asset Profile', hint: 'Pipeline parameters' },
-  { key: 2, label: 'Contacts', hint: 'Ownership & escalation' },
-  { key: 3, label: 'Vendor Configuration', hint: 'Third party service providers' },
-  { key: 4, label: 'Compliance', hint: 'Reporting frameworks' },
+  { key: 1, label: "Pipeline Asset Profile", hint: "Pipeline parameters" },
+  { key: 2, label: "Contacts", hint: "Ownership & escalation" },
+  {
+    key: 3,
+    label: "Vendor Configuration",
+    hint: "Third party service providers",
+  },
+  { key: 4, label: "Compliance", hint: "Reporting frameworks" },
 ];
 
 const DEFAULT_VENDOR = {
-  id: 'default-galaxy',
-  companyName: 'Galaxy Midstream',
-  personnelName: 'George Hayman',
-  email: 'ops@galaxymidstream.com',
-  phone: '800-555-0199',
-  serviceScope: 'Pipeline Integrity & Maintenance',
+  id: "default-galaxy",
+  companyName: "Galaxy Midstream",
+  personnelName: "George Hayman",
+  email: "ops@galaxymidstream.com",
+  phone: "800-555-0199",
+  serviceScope: "Pipeline Integrity & Maintenance",
 };
 
 const SystemInit = ({ onComplete }) => {
@@ -25,18 +34,18 @@ const SystemInit = ({ onComplete }) => {
   const [showContactInfo, setShowContactInfo] = useState(false);
 
   const [formData, setFormData] = useState({
-    operatorName: 'Yunoya LTD',
-    county: 'Midland',
-    location: 'Permian Basin',
-    material: 'Steel',
-    type: 'Transmission',
-    notes: '',
+    operatorName: "Yunoya LTD",
+    county: "Midland",
+    location: "Permian Basin",
+    material: "Steel",
+    type: "Transmission",
+    notes: "",
     phmsa: true,
     trrc: true,
 
     // Smart Onboarding Toggles - field names match the backend PipelineProfile
     // model exactly, so saveProfile() below can send this object almost as-is.
-    classLocation: '',
+    classLocation: "",
     hasRegulatingStations: false,
     vaultVolumeGreater200cf: false,
     hasControlRoom: false,
@@ -53,19 +62,19 @@ const SystemInit = ({ onComplete }) => {
     hasExposedOnshoreSteel: false,
     isOffshore: false,
     hasWeldedPiping: false,
-    welderRequalPath: '',
+    welderRequalPath: "",
   });
 
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [contacts, setContacts] = useState([
     {
       id: 1,
-      name: 'Jacob Kiage',
-      role: 'Engineer',
-      email: 'jacobkiage4@gmail.com',
-      phone: '0741357536',
+      name: "Jacob Kiage",
+      role: "Engineer",
+      email: "jacobkiage4@gmail.com",
+      phone: "0741357536",
     },
   ]);
 
@@ -76,7 +85,7 @@ const SystemInit = ({ onComplete }) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -84,12 +93,14 @@ const SystemInit = ({ onComplete }) => {
   const addContact = () => {
     setContacts([
       ...contacts,
-      { id: Date.now(), name: '', role: '', email: '', phone: '' },
+      { id: Date.now(), name: "", role: "", email: "", phone: "" },
     ]);
   };
 
   const updateContact = (id, field, value) => {
-    setContacts(contacts.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
+    setContacts(
+      contacts.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
+    );
   };
 
   const removeContact = (id) => {
@@ -104,17 +115,19 @@ const SystemInit = ({ onComplete }) => {
       ...vendors,
       {
         id: Date.now(),
-        companyName: '',
-        personnelName: '',
-        email: '',
-        phone: '',
-        serviceScope: '',
+        companyName: "",
+        personnelName: "",
+        email: "",
+        phone: "",
+        serviceScope: "",
       },
     ]);
   };
 
   const updateVendor = (id, field, value) => {
-    setVendors(vendors.map((v) => (v.id === id ? { ...v, [field]: value } : v)));
+    setVendors(
+      vendors.map((v) => (v.id === id ? { ...v, [field]: value } : v)),
+    );
   };
 
   const removeVendor = (id) => {
@@ -131,7 +144,7 @@ const SystemInit = ({ onComplete }) => {
   });
 
   const handleNext = () => {
-    setSubmitError('');
+    setSubmitError("");
     if (activeStep < 4) {
       setActiveStep(activeStep + 1);
     } else if (onComplete) {
@@ -156,7 +169,7 @@ const SystemInit = ({ onComplete }) => {
   };
 
   const handleFinalizeSetup = async () => {
-    setSubmitError('');
+    setSubmitError("");
     setIsSubmitting(true);
     try {
       await updateCompany({
@@ -168,7 +181,9 @@ const SystemInit = ({ onComplete }) => {
       await saveProfile({
         assetType: formData.type,
         pipeMaterial: formData.material,
-        classLocation: formData.classLocation ? Number(formData.classLocation) : null,
+        classLocation: formData.classLocation
+          ? Number(formData.classLocation)
+          : null,
         hasRegulatingStations: formData.hasRegulatingStations,
         vaultVolumeGreater200cf: formData.vaultVolumeGreater200cf,
         hasControlRoom: formData.hasControlRoom,
@@ -192,16 +207,29 @@ const SystemInit = ({ onComplete }) => {
       for (let i = 0; i < contacts.length; i += 1) {
         const c = contacts[i];
         if (!c.name || !c.email) continue; // skip incomplete rows rather than fail the whole setup
-        await addContact({ fullName: c.name, title: c.role, email: c.email, phone: c.phone, escalationLevel: i + 1 });
+        await addContact({
+          fullName: c.name,
+          title: c.role,
+          email: c.email,
+          phone: c.phone,
+          escalationLevel: i + 1,
+        });
       }
 
       for (const v of vendors) {
         if (!v.companyName) continue;
-        await addVendor({ companyName: v.companyName, personnelName: v.personnelName, email: v.email, phone: v.phone, serviceScope: v.serviceScope });
+        await addVendor({
+          companyName: v.companyName,
+          personnelName: v.personnelName,
+          email: v.email,
+          phone: v.phone,
+          serviceScope: v.serviceScope,
+        });
       }
 
       setShowMasterLedger(true);
     } catch (err) {
+      console.error("[SystemInit] handleFinalizeSetup failed:", err);
       setSubmitError(err.message);
     } finally {
       setIsSubmitting(false);
@@ -229,19 +257,19 @@ const SystemInit = ({ onComplete }) => {
           {STEPS.map((step, idx) => {
             const state =
               step.key === activeStep
-                ? 'active'
+                ? "active"
                 : step.key < activeStep
-                ? 'done'
-                : 'pending';
+                  ? "done"
+                  : "pending";
             return (
               <React.Fragment key={step.key}>
                 <button
                   className={`init-rail-step init-rail-step--${state}`}
                   onClick={() => handleStepClick(step.key)}
-                  disabled={state === 'pending'}
+                  disabled={state === "pending"}
                 >
                   <span className="init-rail-index">
-                    {state === 'done' ? '✓' : String(step.key).padStart(2, '0')}
+                    {state === "done" ? "✓" : String(step.key).padStart(2, "0")}
                   </span>
                   <span className="init-rail-copy">
                     <span className="init-rail-label">{step.label}</span>
@@ -261,16 +289,20 @@ const SystemInit = ({ onComplete }) => {
           <div>
             <div className="init-panel-head">
               <span className="init-panel-eyebrow">
-                STEP {String(activeStep).padStart(2, '0')} / 04
+                STEP {String(activeStep).padStart(2, "0")} / 04
               </span>
               <h2 className="init-panel-title">
                 {STEPS[activeStep - 1].label}
               </h2>
               <p className="init-panel-sub">
-                {activeStep === 1 && 'Configure your primary pipeline parameters.'}
-                {activeStep === 2 && 'Define the contact hierarchy for overdue requirement alerts.'}
-                {activeStep === 3 && 'Register third party vendor companies and personnel.'}
-                {activeStep === 4 && 'Confirm which reporting frameworks apply.'}
+                {activeStep === 1 &&
+                  "Configure your primary pipeline parameters."}
+                {activeStep === 2 &&
+                  "Define the contact hierarchy for overdue requirement alerts."}
+                {activeStep === 3 &&
+                  "Register third party vendor companies and personnel."}
+                {activeStep === 4 &&
+                  "Confirm which reporting frameworks apply."}
               </p>
             </div>
 
@@ -360,22 +392,55 @@ const SystemInit = ({ onComplete }) => {
                       pipeline_profile_form_spec.json for the full field list. */}
                   <div className="init-checkbox-group">
                     {[
-                      ['hasRegulatingStations', 'Pressure limiting / regulating stations?'],
-                      ['vaultVolumeGreater200cf', 'Vaults over 200 cubic feet?'],
-                      ['hasControlRoom', 'Dedicated control room?'],
-                      ['isOdorized', 'Gas system actively odorized?'],
-                      ['transportsCorrosiveGas', 'Transports corrosive gas?'],
-                      ['hasHighConsequenceAreas', 'Passes through High Consequence Areas?'],
-                      ['servesPublicSchools', 'Serves public school piping?'],
-                      ['hasBusinessDistricts', 'Runs inside a business district?'],
-                      ['hasNonBusinessAssets', 'Has assets outside business districts?'],
-                      ['isCathodicallyProtected', 'Cathodically protected steel segments?'],
-                      ['hasCpRectifiers', 'Uses CP rectifiers / power sources?'],
-                      ['hasInterferenceBonds', 'Has critical interference bonds/diodes?'],
-                      ['isBareUnprotectedSteel', 'Any bare/unprotected legacy steel?'],
-                      ['hasExposedOnshoreSteel', 'Onshore steel exposed to atmosphere?'],
-                      ['isOffshore', 'Manages offshore structures?'],
-                      ['hasWeldedPiping', 'Requires on-site production welding?'],
+                      [
+                        "hasRegulatingStations",
+                        "Pressure limiting / regulating stations?",
+                      ],
+                      [
+                        "vaultVolumeGreater200cf",
+                        "Vaults over 200 cubic feet?",
+                      ],
+                      ["hasControlRoom", "Dedicated control room?"],
+                      ["isOdorized", "Gas system actively odorized?"],
+                      ["transportsCorrosiveGas", "Transports corrosive gas?"],
+                      [
+                        "hasHighConsequenceAreas",
+                        "Passes through High Consequence Areas?",
+                      ],
+                      ["servesPublicSchools", "Serves public school piping?"],
+                      [
+                        "hasBusinessDistricts",
+                        "Runs inside a business district?",
+                      ],
+                      [
+                        "hasNonBusinessAssets",
+                        "Has assets outside business districts?",
+                      ],
+                      [
+                        "isCathodicallyProtected",
+                        "Cathodically protected steel segments?",
+                      ],
+                      [
+                        "hasCpRectifiers",
+                        "Uses CP rectifiers / power sources?",
+                      ],
+                      [
+                        "hasInterferenceBonds",
+                        "Has critical interference bonds/diodes?",
+                      ],
+                      [
+                        "isBareUnprotectedSteel",
+                        "Any bare/unprotected legacy steel?",
+                      ],
+                      [
+                        "hasExposedOnshoreSteel",
+                        "Onshore steel exposed to atmosphere?",
+                      ],
+                      ["isOffshore", "Manages offshore structures?"],
+                      [
+                        "hasWeldedPiping",
+                        "Requires on-site production welding?",
+                      ],
                     ].map(([field, label]) => (
                       <label className="init-checkbox-row" key={field}>
                         <input
@@ -394,7 +459,9 @@ const SystemInit = ({ onComplete }) => {
 
                   {formData.hasWeldedPiping && (
                     <div className="init-form-group">
-                      <label className="init-label">Welder Re-qualification Path</label>
+                      <label className="init-label">
+                        Welder Re-qualification Path
+                      </label>
                       <select
                         name="welderRequalPath"
                         className="init-select"
@@ -402,8 +469,12 @@ const SystemInit = ({ onComplete }) => {
                         onChange={handleInputChange}
                       >
                         <option value="">Select a path...</option>
-                        <option value="destructive_test_path">Destructive/non-destructive re-test (twice yearly)</option>
-                        <option value="annual_path">Annual re-qualification (once yearly)</option>
+                        <option value="destructive_test_path">
+                          Destructive/non-destructive re-test (twice yearly)
+                        </option>
+                        <option value="annual_path">
+                          Annual re-qualification (once yearly)
+                        </option>
                       </select>
                     </div>
                   )}
@@ -414,7 +485,9 @@ const SystemInit = ({ onComplete }) => {
               {activeStep === 2 && (
                 <>
                   <div className="contacts-hint-row">
-                    <span className="contacts-hint-label">Escalation Order</span>
+                    <span className="contacts-hint-label">
+                      Escalation Order
+                    </span>
                     <button
                       type="button"
                       className="contacts-info-icon"
@@ -427,11 +500,12 @@ const SystemInit = ({ onComplete }) => {
                     {showContactInfo && (
                       <div className="contacts-info-tooltip">
                         <p>
-                          Contacts are ranked by position. The{' '}
+                          Contacts are ranked by position. The{" "}
                           <strong>first contact</strong> is field/office level
                           and is notified first as a requirement approaches its
                           due date. Escalation climbs down the list toward the
-                          highest authority the closer (or more overdue) it gets.
+                          highest authority the closer (or more overdue) it
+                          gets.
                         </p>
                       </div>
                     )}
@@ -448,7 +522,7 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Full Name"
                             value={contact.name}
                             onChange={(e) =>
-                              updateContact(contact.id, 'name', e.target.value)
+                              updateContact(contact.id, "name", e.target.value)
                             }
                             className="init-input"
                           />
@@ -457,7 +531,7 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Role / Title"
                             value={contact.role}
                             onChange={(e) =>
-                              updateContact(contact.id, 'role', e.target.value)
+                              updateContact(contact.id, "role", e.target.value)
                             }
                             className="init-input"
                           />
@@ -469,7 +543,7 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Email Address"
                             value={contact.email}
                             onChange={(e) =>
-                              updateContact(contact.id, 'email', e.target.value)
+                              updateContact(contact.id, "email", e.target.value)
                             }
                             className="init-input"
                           />
@@ -478,7 +552,7 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Phone Number"
                             value={contact.phone}
                             onChange={(e) =>
-                              updateContact(contact.id, 'phone', e.target.value)
+                              updateContact(contact.id, "phone", e.target.value)
                             }
                             className="init-input"
                           />
@@ -507,7 +581,9 @@ const SystemInit = ({ onComplete }) => {
               {activeStep === 3 && (
                 <>
                   <div className="contacts-hint-row">
-                    <span className="contacts-hint-label">Service Providers & Vendors</span>
+                    <span className="contacts-hint-label">
+                      Service Providers & Vendors
+                    </span>
                   </div>
 
                   <div className="contacts-list">
@@ -521,7 +597,11 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Company Name (e.g. Galaxy Midstream)"
                             value={vendor.companyName}
                             onChange={(e) =>
-                              updateVendor(vendor.id, 'companyName', e.target.value)
+                              updateVendor(
+                                vendor.id,
+                                "companyName",
+                                e.target.value,
+                              )
                             }
                             className="init-input"
                           />
@@ -530,7 +610,11 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Personnel / Contact Name"
                             value={vendor.personnelName}
                             onChange={(e) =>
-                              updateVendor(vendor.id, 'personnelName', e.target.value)
+                              updateVendor(
+                                vendor.id,
+                                "personnelName",
+                                e.target.value,
+                              )
                             }
                             className="init-input"
                           />
@@ -542,7 +626,7 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Vendor Email"
                             value={vendor.email}
                             onChange={(e) =>
-                              updateVendor(vendor.id, 'email', e.target.value)
+                              updateVendor(vendor.id, "email", e.target.value)
                             }
                             className="init-input"
                           />
@@ -551,19 +635,26 @@ const SystemInit = ({ onComplete }) => {
                             placeholder="Phone Number"
                             value={vendor.phone}
                             onChange={(e) =>
-                              updateVendor(vendor.id, 'phone', e.target.value)
+                              updateVendor(vendor.id, "phone", e.target.value)
                             }
                             className="init-input"
                           />
                         </div>
 
-                        <div className="contact-fields" style={{ width: '100%', marginTop: '8px' }}>
+                        <div
+                          className="contact-fields"
+                          style={{ width: "100%", marginTop: "8px" }}
+                        >
                           <input
                             type="text"
                             placeholder="Service Scope (e.g. Inline Inspection, Cathodic Protection)"
                             value={vendor.serviceScope}
                             onChange={(e) =>
-                              updateVendor(vendor.id, 'serviceScope', e.target.value)
+                              updateVendor(
+                                vendor.id,
+                                "serviceScope",
+                                e.target.value,
+                              )
                             }
                             className="init-input"
                           />
@@ -646,14 +737,29 @@ const SystemInit = ({ onComplete }) => {
           </div>
 
           {/* Action Buttons */}
-          {submitError && <p className="init-error" style={{ color: '#c0392b', marginBottom: 8 }}>{submitError}</p>}
+          {submitError && (
+            <p
+              className="init-error"
+              style={{ color: "#c0392b", marginBottom: 8 }}
+            >
+              {submitError}
+            </p>
+          )}
           <div className="init-actions">
             {activeStep === 3 ? (
               <>
-                <button className="init-btn-ghost" onClick={handleSkip} disabled={isSubmitting}>
+                <button
+                  className="init-btn-ghost"
+                  onClick={handleSkip}
+                  disabled={isSubmitting}
+                >
                   SKIP VENDOR CONFIG
                 </button>
-                <button className="init-btn-primary" onClick={handleNext} disabled={isSubmitting}>
+                <button
+                  className="init-btn-primary"
+                  onClick={handleNext}
+                  disabled={isSubmitting}
+                >
                   COMPLIANCE FRAMEWORK →
                 </button>
               </>
@@ -671,7 +777,11 @@ const SystemInit = ({ onComplete }) => {
                   onClick={activeStep < 4 ? handleNext : handleFinalizeSetup}
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? 'SAVING...' : activeStep < 4 ? 'PROCEED →' : 'INITIALIZE SYSTEM ✓'}
+                  {isSubmitting
+                    ? "SAVING..."
+                    : activeStep < 4
+                      ? "PROCEED →"
+                      : "INITIALIZE SYSTEM ✓"}
                 </button>
               </>
             )}

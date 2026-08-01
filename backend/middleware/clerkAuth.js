@@ -22,6 +22,7 @@ async function requireAuth(req, res, next) {
   try {
     claims = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
   } catch (err) {
+    console.error(`[auth] token verification failed: ${err.message}`);
     return res.status(401).json({ error: 'Invalid or expired session token' });
   }
 
@@ -36,6 +37,7 @@ async function requireAuth(req, res, next) {
       clerkUserId,
       email: claims.email || '',
     });
+    console.log(`[auth] created new Operator record for Clerk user ${clerkUserId}`);
   }
 
   if (!operator.subscriptionActive) {

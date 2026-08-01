@@ -26,6 +26,7 @@ const asyncHandler = require('../../utils/asyncHandler');
 const confirmItems = asyncHandler(async (req, res) => {
   const { items } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
+    console.warn(`[compliance-items/confirm] operator ${req.operatorId}: request body had no items - frontend likely received 0 suggested requirements. Check GET /requirements/suggested logs for this operator.`);
     return res.status(422).json({ error: 'items array is required' });
   }
 
@@ -85,10 +86,12 @@ const confirmItems = asyncHandler(async (req, res) => {
   }
 
   if (validationErrors.length > 0) {
+    console.warn(`[compliance-items/confirm] operator ${req.operatorId}: rejected, ${validationErrors.length} validation error(s)`, validationErrors);
     return res.status(422).json({ error: 'Some items could not be confirmed', details: validationErrors });
   }
 
   const created = await ComplianceItem.insertMany(docsToInsert);
+  console.log(`[compliance-items/confirm] operator ${req.operatorId}: confirmed ${created.length} compliance items`);
   res.status(201).json({ createdCount: created.length, items: created });
 });
 

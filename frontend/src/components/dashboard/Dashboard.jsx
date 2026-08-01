@@ -101,7 +101,10 @@ const ComplianceDashboard = ({ configData }) => {
         setRequirements((data.items || []).map(mapItemForDisplay));
         setLoadError('');
       })
-      .catch((err) => setLoadError(err.message))
+      .catch((err) => {
+        console.error('[Dashboard] getComplianceItems failed:', err);
+        setLoadError(err.message);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -131,6 +134,7 @@ const ComplianceDashboard = ({ configData }) => {
       try {
         await completeComplianceItem(id, { completedDate: updates.lastCompleted });
       } catch (err) {
+        console.error('[Dashboard] completeComplianceItem failed:', err);
         setLoadError(err.message);
         return;
       }

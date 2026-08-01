@@ -21,6 +21,7 @@ const completeItem = asyncHandler(async (req, res) => {
     notes: req.body.notes || '',
   });
 
+  console.log(`[compliance-items] operator ${req.operatorId}: completed item ${item._id}, next due ${updated.nextDueDate}`);
   res.json(updated);
 });
 
