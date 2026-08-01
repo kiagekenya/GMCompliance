@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './Dashboard.css';
 import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
-import { getComplianceItems, completeComplianceItem } from '../../api/client';
+import { getComplianceItems, completeComplianceItem, updateComplianceItem, listContacts, getArchive } from '../../api/client';
 
 // Everything that used to live here (INITIAL_REQUIREMENTS, calculateNextDue,
 // getStatusFromDue, enrichRequirement) is GONE. All dates and statuses now
@@ -10,19 +10,24 @@ import { getComplianceItems, completeComplianceItem } from '../../api/client';
 // engine is the single source of truth, so there is no client-side date math
 // left in this file at all.
 
-// Backend status values (awaiting_input | compliant | due | started | done |
-// past_due) map onto the 3 display states this UI already knows how to draw.
+// Backend status values (pending | awaiting_input | compliant | due | started |
+// done | past_due) map onto 4 display states. 'pending' is the default for
+// every newly created item - it means "never completed," which is
+// deliberately NOT the same visual state as 'compliant'. A fresh install
+// should show everything as not-yet-done, not falsely green.
 const mapStatusForDisplay = (backendStatus) => {
   if (backendStatus === 'past_due') return 'past due';
   if (backendStatus === 'due' || backendStatus === 'started') return 'due';
   if (backendStatus === 'compliant' || backendStatus === 'done') return 'compliant';
-  return ''; // awaiting_input -> shown as "Not set"
+  if (backendStatus === 'pending') return 'pending';
+  return ''; // awaiting_input -> shown as "Not set" (should not occur in practice)
 };
 
 // Maps one raw ComplianceItem API response into the flat shape this component's
 // table/Dial/RequirementDetail already expect (id, category, citation, etc.)
 const mapItemForDisplay = (item) => ({
   id: item._id,
+  requirementId: item.requirementId?._id,
   category: item.requirementId?.categoryName || 'Uncategorized',
   citation: item.requirementId?.sourceRegulation || '',
   description: item.requirementId?.title || '',
@@ -30,10 +35,17 @@ const mapItemForDisplay = (item) => ({
   removable: item.requirementId?.removable,
   frequencyValue: item.resolvedFrequencyValue,
   frequencyUnit: item.resolvedFrequencyUnit,
+  frequencyRule: item.resolvedFrequencyValue
+    ? `Every ${item.resolvedFrequencyValue} ${item.resolvedFrequencyUnit}`
+    : 'Interval not yet set',
   requiresOperatorInput: item.requiresOperatorInput,
   lastCompleted: item.lastCompletedDate,
   nextDue: item.nextDueDate,
-  assigned: item.assignedVendorId || 'Unassigned', // NOTE: vendor-name display needs a populate on the backend route; left as-is for now
+  assignedContactId: item.assignedContactId?._id || null,
+  assignedContactName: item.assignedContactId?.fullName || null,
+  assignedVendorId: item.assignedVendorId?._id || null,
+  assignedVendorName: item.assignedVendorId?.companyName || null,
+  assigned: item.assignedContactId?.fullName || item.assignedVendorId?.companyName || 'Unassigned',
   status: mapStatusForDisplay(item.status),
 });
 
@@ -91,6 +103,10 @@ const ComplianceDashboard = ({ configData }) => {
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [, setActiveCategory] = useState(null);
   const [openBreakdownCat, setOpenBreakdownCat] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [mainView, setMainView] = useState('ledger'); // 'ledger' | 'archive'
+  const [archiveEntries, setArchiveEntries] = useState([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   const vendors = configData?.vendors || [];
 
@@ -108,8 +124,26 @@ const ComplianceDashboard = ({ configData }) => {
       .finally(() => setLoading(false));
   };
 
+  const fetchContacts = () => {
+    listContacts()
+      .then((data) => {
+        const sorted = [...(data.contacts || [])].sort((a, b) => a.escalationLevel - b.escalationLevel);
+        setContacts(sorted);
+      })
+      .catch((err) => console.error('[Dashboard] listContacts failed:', err));
+  };
+
+  const fetchArchive = () => {
+    setArchiveLoading(true);
+    getArchive()
+      .then((data) => setArchiveEntries(data.entries || []))
+      .catch((err) => console.error('[Dashboard] getArchive failed:', err))
+      .finally(() => setArchiveLoading(false));
+  };
+
   useEffect(() => {
     fetchItems();
+    fetchContacts();
   }, []);
 
   // The category list is now derived from whatever the backend actually
@@ -126,22 +160,35 @@ const ComplianceDashboard = ({ configData }) => {
   // completion endpoint (which logs to the audit archive and rolls the
   // schedule forward), then refresh from the server rather than guessing
   // the new status/date locally.
+  //
+  // Two distinct kinds of update come from RequirementDetail now:
+  //  'assign'   - who's responsible for this item. Pure metadata, does NOT
+  //               touch status or the audit archive.
+  //  'complete' - the real "mark compliant" action. Logs to the audit
+  //               archive and recomputes the real schedule going forward.
   const handleRequirementUpdate = async (id, updates) => {
-    const current = requirements.find((r) => r.id === id);
-    const completedChanged = updates.lastCompleted && updates.lastCompleted !== current?.lastCompleted;
-
-    if (completedChanged) {
-      try {
-        await completeComplianceItem(id, { completedDate: updates.lastCompleted });
-      } catch (err) {
-        console.error('[Dashboard] completeComplianceItem failed:', err);
-        setLoadError(err.message);
-        return;
+    try {
+      if (updates.kind === 'assign') {
+        const payload = updates.assigneeType === 'vendor'
+          ? { assignedVendorId: updates.assignedId }
+          : { assignedContactId: updates.assignedId };
+        await updateComplianceItem(id, payload);
+        console.log(`[Dashboard] assigned item ${id}`, payload);
+      } else if (updates.kind === 'complete') {
+        await completeComplianceItem(id, {
+          completedDate: updates.completedDate,
+          completedByName: updates.completedByName,
+          evidenceUrl: updates.evidenceUrl,
+          notes: updates.notes,
+        });
+        console.log(`[Dashboard] marked item ${id} compliant`);
+        fetchArchive(); // keep the archive fresh even if they're not currently viewing it
       }
+    } catch (err) {
+      console.error('[Dashboard] handleRequirementUpdate failed:', err);
+      setLoadError(err.message);
+      return;
     }
-    // NOTE: vendor assignment (updates.assigned) is a free-text name in this
-    // UI today; wiring it to a real Vendor _id via PATCH /compliance-items/:id
-    // is a follow-up once RequirementDetail's vendor picker uses vendor IDs.
 
     fetchItems();
     setSelectedRequirement(null);
@@ -191,7 +238,7 @@ const ComplianceDashboard = ({ configData }) => {
         </div>
 
         <nav className="sidebar-nav">
-          <a href="#" className="active">
+          <a href="#calendar" className={mainView === 'ledger' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setMainView('ledger'); setSelectedRequirement(null); }}>
             <i className="fas fa-calendar-alt" aria-hidden="true"></i>
             <span>CALENDAR</span>
           </a>
@@ -207,7 +254,7 @@ const ComplianceDashboard = ({ configData }) => {
             <i className="fas fa-chart-bar" aria-hidden="true"></i>
             <span>REPORTS</span>
           </a>
-          <a href="#">
+          <a href="#archive" className={mainView === 'archive' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setMainView('archive'); fetchArchive(); }}>
             <i className="fas fa-archive" aria-hidden="true"></i>
             <span>AUDIT ARCHIVE</span>
           </a>
@@ -231,12 +278,48 @@ const ComplianceDashboard = ({ configData }) => {
         {loading && <p style={{ padding: 24 }}>Loading your compliance calendar…</p>}
         {loadError && <p style={{ padding: 24, color: '#c0392b' }}>{loadError}</p>}
 
-        {!loading && !loadError && selectedRequirement ? (
+        {!loading && !loadError && mainView === 'archive' ? (
+          <div style={{ padding: 24 }}>
+            <h2 style={{ marginBottom: 16 }}>Audit Archive</h2>
+            {archiveLoading && <p>Loading archive…</p>}
+            {!archiveLoading && archiveEntries.length === 0 && (
+              <p style={{ opacity: 0.7 }}>Nothing logged yet. Entries appear here the moment anything is marked compliant.</p>
+            )}
+            {!archiveLoading && archiveEntries.length > 0 && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date Completed</th>
+                    <th>Regulation</th>
+                    <th>Category</th>
+                    <th>Completed By</th>
+                    <th>Evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archiveEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{formatDate(entry.completedDate)}</td>
+                      <td>
+                        <strong>{entry.regulationTitle}</strong>
+                        <div style={{ fontSize: 12, opacity: 0.7 }}>{entry.sourceRegulation}</div>
+                      </td>
+                      <td>{entry.categoryName}</td>
+                      <td>{entry.completedBy}</td>
+                      <td>{entry.evidenceUrl || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : !loading && !loadError && selectedRequirement ? (
           <RequirementDetail
             requirement={selectedRequirement}
             onBack={() => setSelectedRequirement(null)}
             onUpdate={handleRequirementUpdate}
             vendorList={vendors}
+            contactList={contacts}
           />
         ) : (!loading && !loadError && (
           <>
@@ -311,7 +394,7 @@ const ComplianceDashboard = ({ configData }) => {
                                   </div>
                                   <div className={`cat-count-row cat-count-row--unset ${counts.unset === 0 ? 'is-zero' : ''}`}>
                                     <span className="cat-count-dot"></span>
-                                    <span className="cat-count-name">Not Set</span>
+                                    <span className="cat-count-name">Not Completed</span>
                                     <span className="cat-count-value">{counts.unset}</span>
                                   </div>
                                 </div>
@@ -335,10 +418,15 @@ const ComplianceDashboard = ({ configData }) => {
                                   <span style={{ marginLeft: 8, color: '#C98A1E', fontSize: 11 }}>⚠ needs interval</span>
                                 )}
                               </td>
-                              <td className="td-due">{req.nextDue ? formatDate(req.nextDue) : 'Not set'}</td>
+                              <td className="td-due">{req.nextDue ? formatDate(req.nextDue) : 'Not completed yet'}</td>
                               <td className="td-assign">{req.assigned || 'Unassigned'}</td>
                               <td className="td-status">
-                                {req.status ? (
+                                {req.status === 'pending' ? (
+                                  <>
+                                    <span className="status-dot" style={{ background: '#6B7280' }}></span>
+                                    Not completed — click to mark done
+                                  </>
+                                ) : req.status ? (
                                   <>
                                     <span
                                       className="status-dot"
@@ -363,13 +451,26 @@ const ComplianceDashboard = ({ configData }) => {
                 </table>
               </div>
 
-              {/* Escalation ladder */}
+              {/* Escalation ladder - real contacts, sorted by escalationLevel
+                  (1 = notified first, highest number = notified last / on overdue) */}
               <div className="escalation-rail">
                 <h4>Escalation Ladder</h4>
-                <p style={{ padding: '8px 12px', fontSize: 12, opacity: 0.7 }}>
-                  Wire this list to GET /api/contacts (sorted by escalationLevel) as a follow-up -
-                  it's currently still the placeholder names from the original UI.
-                </p>
+                {contacts.length === 0 ? (
+                  <p style={{ padding: '8px 12px', fontSize: 12, opacity: 0.7 }}>
+                    No contacts on file yet.
+                  </p>
+                ) : (
+                  <ol style={{ listStyle: 'none', margin: 0, padding: '8px 12px' }}>
+                    {contacts.map((c) => (
+                      <li key={c._id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: 11, opacity: 0.6 }}>LEVEL {c.escalationLevel}</div>
+                        <div style={{ fontWeight: 600 }}>{c.fullName}</div>
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>{c.title}</div>
+                        <div style={{ fontSize: 12, opacity: 0.6 }}>{c.email}</div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
               </div>
             </div>
           </>

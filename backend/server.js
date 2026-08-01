@@ -48,9 +48,7 @@ connectDB().then(async () => {
   }
 
   app.listen(PORT, () => console.log(`Galaxy Compliance backend running on port ${PORT}`));
-// The "engine" step from the flow diagram: re-check every item's status
-  // once a day, so items entering their Action Window flip to 'due'
-  // automatically even if nobody touches the app that day.
+
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   setInterval(() => {
     recalculateAllStatuses()

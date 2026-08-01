@@ -75,6 +75,7 @@ export const getSuggestedRequirements = () => request('/requirements/suggested')
 // --- Compliance items (the operator's calendar) ---
 export const confirmComplianceItems = (items) => request('/compliance-items/confirm', { method: 'POST', body: { items } });
 export const getComplianceItems = () => request('/compliance-items');
+export const getArchive = () => request('/compliance-items/archive');
 export const updateComplianceItem = (id, payload) => request(`/compliance-items/${id}`, { method: 'PATCH', body: payload });
 export const completeComplianceItem = (id, payload) => request(`/compliance-items/${id}/complete`, { method: 'POST', body: payload });
 

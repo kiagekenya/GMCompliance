@@ -1,102 +1,81 @@
+// RequirementDetail.jsx
+//
+// Two clearly separate actions on this screen now, on purpose:
+//
+//  1. "ASSIGN OWNER" - pure metadata. Pick who's responsible for this item
+//     (an internal contact or a vendor). Does NOT touch compliance status
+//     and does NOT go in the audit archive - it's just "who owns this."
+//
+//  2. "MARK COMPLIANT" - the real completion event. Set the date it was
+//     actually done, who did it, and attach evidence. THIS is the action
+//     that changes the status badge and writes a permanent audit archive
+//     entry - it's the only thing that can turn an item green.
+//
+// These used to be smushed into one ambiguous "green button that's
+// somehow also an edit form" - they're deliberately separate now.
+
 import React, { useState } from 'react';
 import './RequirementDetail.css';
 
-const EMPLOYEES = [
-  'Jacob Kiage',
-  'Paul Wanjau',
-  'Reuben Moses',
-  'Aisha Patel',
-  'Brian Bollo',
-  'Dana Chebet',
-];
-
-const DEFAULT_VENDORS = ['Galaxy Midstream'];
 const CUSTOM_VALUE = '__custom__';
 
-const RequirementDetail = ({ requirement, onBack, onUpdate, vendorList = DEFAULT_VENDORS }) => {
-  const [lastCompleted, setLastCompleted] = useState(requirement.lastCompleted || '');
-  const [assigneeType, setAssigneeType] = useState(requirement.assigneeType || 'employee');
-  const [documents, setDocuments] = useState(requirement.documents || []);
+const RequirementDetail = ({ requirement, onBack, onUpdate, vendorList = [], contactList = [] }) => {
+  const [activePanel, setActivePanel] = useState(null); // null | 'assign' | 'complete'
 
-  // Format incoming vendors if passed as objects or simple strings
-  const activeVendorNames = vendorList.map((v) =>
-    typeof v === 'string' ? v : v.companyName
-  ).filter(Boolean);
-
-  const availableList = assigneeType === 'employee' ? EMPLOYEES : activeVendorNames;
-
-  const initialIsKnown = availableList.includes(requirement.assigned);
-  const [selectedOption, setSelectedOption] = useState(
-    requirement.assigned && initialIsKnown ? requirement.assigned : CUSTOM_VALUE
+  // --- Assign Owner panel state ---
+  const [assigneeType, setAssigneeType] = useState(
+    requirement.assignedVendorId ? 'vendor' : 'employee'
   );
+  const currentAssignedId = assigneeType === 'vendor' ? requirement.assignedVendorId : requirement.assignedContactId;
+  const [selectedId, setSelectedId] = useState(currentAssignedId || CUSTOM_VALUE);
 
-  const [customName, setCustomName] = useState(
-    requirement.assigned && !initialIsKnown ? requirement.assigned : ''
-  );
+  // --- Mark Compliant panel state ---
+  const today = new Date().toISOString().split('T')[0];
+  const [completedDate, setCompletedDate] = useState(today);
+  const [completedByName, setCompletedByName] = useState('');
+  const [evidenceFileName, setEvidenceFileName] = useState('');
+  const [notes, setNotes] = useState('');
 
-  const [isEditing, setIsEditing] = useState(false);
-
-  // File Upload Handler
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    if (files.length === 0) return;
-
-    const newDocs = files.map((file) => ({
-      id: Date.now() + Math.random(),
-      name: file.name,
-      size: (file.size / 1024).toFixed(1) + ' KB',
-      uploadedAt: new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      })
-    }));
-
-    const updatedDocs = [...documents, ...newDocs];
-    setDocuments(updatedDocs);
-    
-    // Auto-sync document updates to parent state
-    onUpdate(requirement.id, { ...requirement, documents: updatedDocs });
-  };
-
-  const handleRemoveDocument = (docId) => {
-    const updatedDocs = documents.filter((doc) => doc.id !== docId);
-    setDocuments(updatedDocs);
-    onUpdate(requirement.id, { ...requirement, documents: updatedDocs });
-  };
-
-  const handleMarkComplete = () => {
-    const today = new Date().toISOString().split('T')[0];
-    setLastCompleted(today);
-    setIsEditing(true);
-  };
+  const employeeOptions = contactList.map((c) => ({ id: c._id, label: c.fullName }));
+  const vendorOptions = vendorList.map((v) => ({
+    id: v._id || v.id,
+    label: v.companyName || v,
+  }));
+  const currentOptions = assigneeType === 'employee' ? employeeOptions : vendorOptions;
 
   const handleTypeChange = (type) => {
     setAssigneeType(type);
-    setSelectedOption(CUSTOM_VALUE);
-    setCustomName('');
+    setSelectedId(CUSTOM_VALUE);
   };
 
-  const handleSave = () => {
-    const finalName = selectedOption === CUSTOM_VALUE ? customName.trim() : selectedOption;
+  const handleSaveAssignment = () => {
+    if (selectedId === CUSTOM_VALUE) return; // nothing picked
     onUpdate(requirement.id, {
-      ...requirement,
-      lastCompleted: lastCompleted || null,
-      assigned: finalName || 'Unassigned',
-      assigneeType: finalName ? assigneeType : null,
-      documents: documents,
+      kind: 'assign',
+      assigneeType,
+      assignedId: selectedId,
     });
-    setIsEditing(false);
+    setActivePanel(null);
   };
 
-  const handleCancel = () => {
-    setLastCompleted(requirement.lastCompleted || '');
-    setAssigneeType(requirement.assigneeType || 'employee');
-    setDocuments(requirement.documents || []);
-    const wasKnown = availableList.includes(requirement.assigned);
-    setSelectedOption(requirement.assigned && wasKnown ? requirement.assigned : CUSTOM_VALUE);
-    setCustomName(requirement.assigned && !wasKnown ? requirement.assigned : '');
-    setIsEditing(false);
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) setEvidenceFileName(file.name);
+    // NOTE: this captures the file NAME only, as a placeholder. Real file
+    // storage (e.g. uploading to S3 and getting back a URL) is a follow-up -
+    // evidenceUrl below is currently just the file name string.
+  };
+
+  const handleMarkCompliant = () => {
+    if (!completedDate) return;
+    onUpdate(requirement.id, {
+      kind: 'complete',
+      completedDate,
+      completedByName: completedByName.trim(),
+      evidenceUrl: evidenceFileName || null,
+      notes: notes.trim(),
+    });
+    setActivePanel(null);
   };
 
   const formatDate = (dateString) => {
@@ -105,230 +84,165 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, vendorList = DEFAULT
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  const statusClass = requirement.status
-    ? requirement.status.replace(/\s+/g, '-')
-    : 'unset';
-  const statusText = requirement.status
-    ? requirement.status.toUpperCase()
-    : 'NOT SET';
+  const statusClass = requirement.status ? requirement.status.replace(/\s+/g, '-') : 'pending';
+  const statusText = requirement.status ? requirement.status.toUpperCase() : 'NOT COMPLETED';
 
   return (
     <div className="detail-container">
-      {/* Back button */}
       <button className="back-button" onClick={onBack}>
         <i className="fas fa-arrow-left"></i>
         BACK TO CALENDAR
       </button>
 
-      {/* Header */}
       <div className="detail-header">
-        <div className="detail-citation">
-          {requirement.citation}
-        </div>
-        <div className="detail-category">
-          {requirement.category.toUpperCase()}
-        </div>
-        <div className={`detail-status-badge ${statusClass}`}>
-          {statusText}
-        </div>
+        <div className="detail-citation">{requirement.citation}</div>
+        <div className="detail-category">{(requirement.category || '').toUpperCase()}</div>
+        <div className={`detail-status-badge ${statusClass}`}>{statusText}</div>
       </div>
 
-      {/* Title */}
       <h1 className="detail-title">{requirement.description}</h1>
 
-      {/* Regulation Rule */}
       <div className="detail-card regulation-card">
         <div className="card-label">REGULATION RULE</div>
         <div className="regulation-text">{requirement.frequencyRule}</div>
-        <button className="regulation-link">
-          <i className="fas fa-file-alt"></i>
-          Read Full Regulation Text
-        </button>
+        {requirement.referenceUrl && (
+          <a className="regulation-link" href={requirement.referenceUrl} target="_blank" rel="noreferrer">
+            <i className="fas fa-file-alt"></i>
+            Read Full Regulation Text
+          </a>
+        )}
       </div>
 
-      {/* Timeline & Assignment */}
       <div className="detail-two-column">
-        {/* Timeline Card */}
         <div className="detail-card timeline-card">
           <div className="card-label">TIMELINE</div>
           <div className="timeline-grid">
             <div className="timeline-item">
               <span className="timeline-sub">NEXT DUE</span>
-              <span className="timeline-value">
-                {requirement.nextDue ? formatDate(requirement.nextDue) : 'Not set'}
-              </span>
+              <span className="timeline-value">{formatDate(requirement.nextDue)}</span>
             </div>
-            <div className="timeline-item editable">
+            <div className="timeline-item">
               <span className="timeline-sub">LAST COMPLETED</span>
-              {isEditing ? (
-                <input
-                  type="date"
-                  className="timeline-input"
-                  value={lastCompleted}
-                  onChange={(e) => setLastCompleted(e.target.value)}
-                />
-              ) : (
-                <span className="timeline-value">
-                  {formatDate(requirement.lastCompleted)}
-                </span>
-              )}
+              <span className="timeline-value">{formatDate(requirement.lastCompleted)}</span>
             </div>
           </div>
         </div>
 
-        {/* Assignment Card */}
         <div className="detail-card assignment-card">
           <div className="card-label">ASSIGNMENT</div>
-          <div className="assignment-content">
-            {isEditing ? (
-              <div className="assignment-editor">
-                <div className="assignee-type-toggle">
-                  <button
-                    type="button"
-                    className={`assignee-type-btn ${assigneeType === 'employee' ? 'active' : ''}`}
-                    onClick={() => handleTypeChange('employee')}
-                  >
-                    <i className="fas fa-user"></i> EMPLOYEE
-                  </button>
-                  <button
-                    type="button"
-                    className={`assignee-type-btn ${assigneeType === 'vendor' ? 'active' : ''}`}
-                    onClick={() => handleTypeChange('vendor')}
-                  >
-                    <i className="fas fa-truck"></i> VENDOR
-                  </button>
-                </div>
-
-                <select
-                  className="assignment-select"
-                  value={selectedOption}
-                  onChange={(e) => setSelectedOption(e.target.value)}
-                >
-                  {availableList.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                  <option value={CUSTOM_VALUE}>
-                    {assigneeType === 'employee' ? 'Other (type a name)...' : 'Other vendor (type a name)...'}
-                  </option>
-                </select>
-
-                {selectedOption === CUSTOM_VALUE && (
-                  <input
-                    type="text"
-                    className="assignment-input"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder={assigneeType === 'employee' ? 'Enter employee name' : 'Enter vendor name'}
-                  />
-                )}
+          <div className="owner-info">
+            <div className="owner-avatar">
+              <i className={`fas ${requirement.assignedVendorId ? 'fa-truck' : 'fa-user'}`}></i>
+            </div>
+            <div>
+              <div className="owner-label">
+                CURRENT OWNER
+                {requirement.assignedVendorId && <span className="vendor-flag">VENDOR</span>}
               </div>
-            ) : (
-              <div className="owner-info">
-                <div className="owner-avatar">
-                  <i className={`fas ${requirement.assigneeType === 'vendor' ? 'fa-truck' : 'fa-user'}`}></i>
-                </div>
-                <div>
-                  <div className="owner-label">
-                    CURRENT OWNER
-                    {requirement.assigneeType === 'vendor' && (
-                      <span className="vendor-flag">VENDOR</span>
-                    )}
-                  </div>
-                  <div className="owner-name">
-                    {requirement.assigned || 'Unassigned'}
-                  </div>
-                </div>
+              <div className="owner-name">
+                {requirement.assignedContactName || requirement.assignedVendorName || 'Unassigned'}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* RENEWAL DOCUMENTS CARD (NEW) */}
-      <div className="detail-card documents-card">
-        <div className="documents-card-header">
-          <div>
-            <div className="card-label">RENEWAL PROOF & DOCUMENTS</div>
-            <span className="documents-subtitle">
-              Attach all supporting evidence before marking complete.
-            </span>
+      {/* ASSIGN OWNER PANEL */}
+      {activePanel === 'assign' && (
+        <div className="detail-card action-card">
+          <div className="card-label">ASSIGN OWNER</div>
+          <div className="assignee-type-toggle">
+            <button type="button" className={`assignee-type-btn ${assigneeType === 'employee' ? 'active' : ''}`} onClick={() => handleTypeChange('employee')}>
+              <i className="fas fa-user"></i> EMPLOYEE / CONTACT
+            </button>
+            <button type="button" className={`assignee-type-btn ${assigneeType === 'vendor' ? 'active' : ''}`} onClick={() => handleTypeChange('vendor')}>
+              <i className="fas fa-truck"></i> VENDOR
+            </button>
           </div>
+
+          <select className="assignment-select" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+            <option value={CUSTOM_VALUE} disabled>
+              {currentOptions.length === 0 ? `No ${assigneeType === 'employee' ? 'contacts' : 'vendors'} on file yet` : 'Select...'}
+            </option>
+            {currentOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </select>
+
+          <div className="action-buttons">
+            <button className="action-button save" onClick={handleSaveAssignment} disabled={selectedId === CUSTOM_VALUE}>
+              <i className="fas fa-save"></i> SAVE ASSIGNMENT
+            </button>
+            <button className="action-button cancel" onClick={() => setActivePanel(null)}>
+              <i className="fas fa-times"></i> CANCEL
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MARK COMPLIANT PANEL - this is the real completion action, with evidence */}
+      {activePanel === 'complete' && (
+        <div className="detail-card action-card">
+          <div className="card-label">MARK COMPLIANT</div>
+
+          <div className="timeline-item editable" style={{ marginBottom: 12 }}>
+            <span className="timeline-sub">DATE COMPLETED</span>
+            <input type="date" className="timeline-input" value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} />
+          </div>
+
+          <div className="timeline-item editable" style={{ marginBottom: 12 }}>
+            <span className="timeline-sub">COMPLETED BY</span>
+            <input
+              type="text"
+              className="assignment-input"
+              placeholder="Name of the person who did the work"
+              value={completedByName}
+              onChange={(e) => setCompletedByName(e.target.value)}
+            />
+          </div>
+
+          <div className="timeline-item editable" style={{ marginBottom: 12 }}>
+            <span className="timeline-sub">NOTES (optional)</span>
+            <input
+              type="text"
+              className="assignment-input"
+              placeholder="Anything worth recording about this completion"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
           <label className="upload-btn">
             <i className="fas fa-cloud-upload-alt"></i>
-            UPLOAD DOCUMENT
-            <input
-              type="file"
-              multiple
-              style={{ display: 'none' }}
-              onChange={handleFileUpload}
-            />
+            {evidenceFileName || 'ATTACH EVIDENCE (optional)'}
+            <input type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
           </label>
-        </div>
 
-        {documents.length > 0 ? (
-          <div className="document-list">
-            {documents.map((doc) => (
-              <div key={doc.id} className="document-item">
-                <div className="doc-icon">
-                  <i className="fas fa-file-pdf"></i>
-                </div>
-                <div className="doc-details">
-                  <span className="doc-name">{doc.name}</span>
-                  <span className="doc-meta">
-                    Uploaded on {doc.uploadedAt} • {doc.size}
-                  </span>
-                </div>
-                <button
-                  className="doc-remove-btn"
-                  title="Remove document"
-                  onClick={() => handleRemoveDocument(doc.id)}
-                >
-                  <i className="fas fa-trash-alt"></i>
-                </button>
-              </div>
-            ))}
+          <div className="action-buttons" style={{ marginTop: 16 }}>
+            <button className="action-button complete" onClick={handleMarkCompliant} disabled={!completedDate}>
+              <i className="fas fa-check-circle"></i> CONFIRM COMPLIANT
+            </button>
+            <button className="action-button cancel" onClick={() => setActivePanel(null)}>
+              <i className="fas fa-times"></i> CANCEL
+            </button>
           </div>
-        ) : (
-          <div className="empty-docs-state">
-            <i className="fas fa-folder-open empty-icon"></i>
-            <p>No proof documents uploaded yet for this cycle.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Action Panel */}
-      <div className="detail-card action-card">
-        <div className="card-label">ACTION PANEL</div>
-        <div className="action-buttons">
-          {isEditing ? (
-            <>
-              <button className="action-button save" onClick={handleSave}>
-                <i className="fas fa-save"></i>
-                SAVE CHANGES
-              </button>
-              <button className="action-button cancel" onClick={handleCancel}>
-                <i className="fas fa-times"></i>
-                CANCEL
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="action-button complete" onClick={handleMarkComplete}>
-                <i className="fas fa-check-circle"></i>
-                MARK COMPLETE
-              </button>
-              <button className="action-button edit" onClick={() => setIsEditing(true)}>
-                <i className="fas fa-edit"></i>
-                EDIT DETAILS
-              </button>
-              <button className="action-button dispatch">
-                <i className="fas fa-truck"></i>
-                DISPATCH VENDOR
-              </button>
-            </>
-          )}
         </div>
-      </div>
+      )}
+
+      {/* Action Panel entry points */}
+      {activePanel === null && (
+        <div className="detail-card action-card">
+          <div className="card-label">ACTION PANEL</div>
+          <div className="action-buttons">
+            <button className="action-button complete" onClick={() => setActivePanel('complete')}>
+              <i className="fas fa-check-circle"></i> MARK COMPLIANT
+            </button>
+            <button className="action-button edit" onClick={() => setActivePanel('assign')}>
+              <i className="fas fa-user-edit"></i> ASSIGN OWNER
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

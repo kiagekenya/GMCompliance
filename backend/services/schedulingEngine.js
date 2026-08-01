@@ -38,12 +38,13 @@ async function recalculateAllStatuses() {
   return { checked: items.length, updated };
 }
 
-async function recordCompletion(complianceItem, { completedDate, completedByContactId, evidenceUrl, notes }) {
+async function recordCompletion(complianceItem, { completedDate, completedByContactId, completedByName, evidenceUrl, notes }) {
   await CompletionLog.create({
     complianceItemId: complianceItem._id,
     operatorId: complianceItem.operatorId,
     completedDate,
     completedByContactId: completedByContactId || null,
+    completedByName: completedByName || '',
     evidenceUrl: evidenceUrl || null,
     notes: notes || '',
   });

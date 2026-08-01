@@ -1,26 +1,35 @@
 // routes/complianceItems/confirmItems.js
 //
 // POST /api/compliance-items/confirm
-// The operator has reviewed the suggested list and sends back their final
-// choices (with any non-core removals applied). Body shape:
+// The operator has reviewed the suggested list and confirms which items go
+// onto their calendar. Body shape:
 //
 // {
 //   "items": [
-//     { "requirementId": "...", "anchorDate": "2026-03-01" },
-//     { "requirementId": "...", "frequencyVariantId": "...", "anchorDate": "2026-01-15" },
-//     { "requirementId": "...", "anchorDate": "2026-01-01",
+//     { "requirementId": "..." },
+//     { "requirementId": "...", "frequencyVariantId": "..." },
+//     { "requirementId": "...",
 //       "operatorDefinedFrequencyValue": 24, "operatorDefinedFrequencyUnit": "months",
 //       "operatorDefinedJustification": "Per Section 4.2 of our OQ plan" }
 //   ]
 // }
 //
-// This is the concrete "the app enforces you set one" mechanism: any
-// operator_defined requirement missing operatorDefinedFrequencyValue gets
-// rejected with a 422 naming exactly which item is missing it.
+// IMPORTANT: items are created with NO anchor date and NO due date, and
+// status 'pending' - NOT auto-marked compliant. A brand new install has
+// completed nothing; assuming "the operator did all 42 chores today" (the
+// old behavior, which defaulted anchorDate to today) is actively wrong and
+// hides the exact thing this app exists to track. The real schedule for
+// each item only begins once a person explicitly marks it complete for the
+// first time (POST /compliance-items/:id/complete) - see schedulingEngine.js.
+//
+// This is also idempotent: upserts on (operatorId, requirementId,
+// frequencyVariantId) instead of blind insertMany, so calling this twice
+// (e.g. a returning user's browser re-running setup) updates the existing
+// items rather than creating duplicates. See the unique index on
+// ComplianceItem for the DB-level guarantee behind this.
 
 const RegulatoryRequirement = require('../../models/RegulatoryRequirement');
 const ComplianceItem = require('../../models/ComplianceItem');
-const { computeInitialSchedule } = require('../../services/schedulingEngine');
 const asyncHandler = require('../../utils/asyncHandler');
 
 const confirmItems = asyncHandler(async (req, res) => {
@@ -35,7 +44,7 @@ const confirmItems = asyncHandler(async (req, res) => {
   const requirementsById = new Map(requirements.map((r) => [String(r._id), r]));
 
   const validationErrors = [];
-  const docsToInsert = [];
+  const upserts = [];
 
   for (const item of items) {
     const requirement = requirementsById.get(String(item.requirementId));
@@ -53,11 +62,6 @@ const confirmItems = asyncHandler(async (req, res) => {
       continue;
     }
 
-    if (!item.anchorDate) {
-      validationErrors.push({ requirementId: item.requirementId, title: requirement.title, error: 'anchorDate is required' });
-      continue;
-    }
-
     const frequencyValue = item.operatorDefinedFrequencyValue
       || findVariantFrequency(requirement, item.frequencyVariantId)
       || requirement.frequencyValue;
@@ -66,22 +70,34 @@ const confirmItems = asyncHandler(async (req, res) => {
       || requirement.frequencyUnit
       || 'months';
 
-    const anchorDate = new Date(item.anchorDate);
-    const { nextDueDate, actionWindowMonths, status } = computeInitialSchedule(anchorDate, frequencyValue, frequencyUnit);
-
-    docsToInsert.push({
-      operatorId: req.operatorId,
-      requirementId: requirement._id,
-      frequencyVariantId: item.frequencyVariantId || null,
-      variantLabel: findVariantLabel(requirement, item.frequencyVariantId),
-      resolvedFrequencyValue: frequencyValue,
-      resolvedFrequencyUnit: frequencyUnit,
-      requiresOperatorInput: false,
-      operatorDefinedJustification: item.operatorDefinedJustification || null,
-      anchorDate,
-      nextDueDate,
-      actionWindowMonths,
-      status,
+    upserts.push({
+      updateOne: {
+        filter: {
+          operatorId: req.operatorId,
+          requirementId: requirement._id,
+          frequencyVariantId: item.frequencyVariantId || null,
+        },
+        update: {
+          $setOnInsert: {
+            // only applied when this exact item doesn't already exist -
+            // re-confirming never resets an item someone has already
+            // completed or is tracking progress on
+            operatorId: req.operatorId,
+            requirementId: requirement._id,
+            frequencyVariantId: item.frequencyVariantId || null,
+            variantLabel: findVariantLabel(requirement, item.frequencyVariantId),
+            resolvedFrequencyValue: frequencyValue,
+            resolvedFrequencyUnit: frequencyUnit,
+            requiresOperatorInput: false,
+            operatorDefinedJustification: item.operatorDefinedJustification || null,
+            anchorDate: null,
+            nextDueDate: null,
+            actionWindowMonths: null,
+            status: 'pending', // not started - only a real "mark complete" changes this
+          },
+        },
+        upsert: true,
+      },
     });
   }
 
@@ -90,9 +106,11 @@ const confirmItems = asyncHandler(async (req, res) => {
     return res.status(422).json({ error: 'Some items could not be confirmed', details: validationErrors });
   }
 
-  const created = await ComplianceItem.insertMany(docsToInsert);
-  console.log(`[compliance-items/confirm] operator ${req.operatorId}: confirmed ${created.length} compliance items`);
-  res.status(201).json({ createdCount: created.length, items: created });
+  const result = await ComplianceItem.bulkWrite(upserts);
+  console.log(`[compliance-items/confirm] operator ${req.operatorId}: ${result.upsertedCount} new items created, ${upserts.length - result.upsertedCount} already existed (no-op)`);
+
+  const items_ = await ComplianceItem.find({ operatorId: req.operatorId, requirementId: { $in: requirementIds } });
+  res.status(201).json({ createdCount: result.upsertedCount, items: items_ });
 });
 
 function findVariantFrequency(requirement, variantId) {

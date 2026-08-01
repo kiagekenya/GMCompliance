@@ -96,12 +96,13 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
     }
 
     setSubmitting(true);
-    const today = new Date().toISOString().slice(0, 10);
 
+    // NOTE: no anchorDate here on purpose. Every item is created as
+    // 'pending' (never completed) - the operator marks each one complete
+    // for real, from the dashboard, as they actually verify/perform it.
     const items = suggested.map((item) => ({
       requirementId: item.requirementId,
       frequencyVariantId: item.frequencyVariantId || undefined,
-      anchorDate: today,
       operatorDefinedFrequencyValue: item.requiresOperatorInput ? Number(operatorInputs[item.requirementId]) : undefined,
       operatorDefinedFrequencyUnit: item.requiresOperatorInput ? 'months' : undefined,
     }));

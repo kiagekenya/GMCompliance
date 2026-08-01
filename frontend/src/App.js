@@ -1,37 +1,120 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
-import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react';
+import { SignedIn, SignedOut, SignIn, UserButton, useUser } from '@clerk/clerk-react';
 
 import SystemInit from './components/systeminit/SystemInit';
 import MasterLedgerInit from './components/masterledgerinit/MasterLedgerInit';
 import Dashboard from './components/dashboard/Dashboard';
+import { getCurrentOperator, getProfile, getComplianceItems, listVendors } from './api/client';
 
-function App() {
-  const [view, setView] = useState('init'); // 'init' | 'master' | 'dashboard'
+function AuthenticatedApp() {
+  // 'checking' = still figuring out where a returning user should land -
+  // this prevents a flash of SystemInit's Step 1 before we know better.
+  const [view, setView] = useState('checking'); // 'checking' | 'init' | 'master' | 'dashboard'
   const [userConfig, setUserConfig] = useState(null);
+  const { isLoaded, isSignedIn } = useUser();
+
+  // Runs once per sign-in. Decides where a person actually belongs instead
+  // of always starting them at Step 1 - that was creating duplicate setup
+  // attempts (and, on the backend, would have created duplicate compliance
+  // items before the upsert fix) every time someone simply logged back in.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const itemsResp = await getComplianceItems();
+        const items = itemsResp.items || [];
+        console.log(`[App] bootstrap: ${items.length} existing compliance items found`);
+
+        if (items.length > 0) {
+          // Calendar already exists - go straight to it, full stop.
+          const [operatorResp, vendorsResp] = await Promise.all([
+            getCurrentOperator().catch(() => ({ operator: {} })),
+            listVendors().catch(() => ({ vendors: [] })),
+          ]);
+          if (cancelled) return;
+          setUserConfig({
+            operatorName: operatorResp.operator?.companyName || 'Operator',
+            vendors: vendorsResp.vendors || [],
+          });
+          setView('dashboard');
+          return;
+        }
+
+        // No items yet - did they at least finish the profile (Step 1)?
+        try {
+          const profileResp = await getProfile();
+          const operatorResp = await getCurrentOperator().catch(() => ({ operator: {} }));
+          if (cancelled) return;
+          console.log('[App] bootstrap: profile exists but no confirmed items yet - resuming at the compliance ledger step');
+          setUserConfig({
+            operatorName: operatorResp.operator?.companyName || 'Operator',
+            material: profileResp.pipeMaterial,
+            type: profileResp.assetType,
+            phmsa: true,
+            trrc: true,
+          });
+          setView('master');
+        } catch (profileErr) {
+          // No profile either (404) - genuinely a brand new operator.
+          if (cancelled) return;
+          console.log('[App] bootstrap: no profile found - starting fresh at Step 1');
+          setView('init');
+        }
+      } catch (err) {
+        console.error('[App] bootstrap failed:', err);
+        if (!cancelled) setView('init'); // fail open to setup rather than a blank screen
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isLoaded, isSignedIn]);
 
   const handleSystemInitComplete = (configData) => {
     setUserConfig(configData);
-    setView('master'); // Show Master Ledger screen
+    setView('master');
   };
 
   const handleInitializeDashboard = () => {
-    setView('dashboard'); // Go to main dashboard
+    setView('dashboard');
   };
 
+  if (view === 'checking') {
+    return <div style={{ padding: 40, textAlign: 'center' }}>Loading your compliance calendar…</div>;
+  }
+
+  return (
+    <>
+      {view === 'init' && (
+        <SystemInit onComplete={handleSystemInitComplete} />
+      )}
+
+      {view === 'master' && (
+        <MasterLedgerInit
+          configData={userConfig}
+          onInitializeDashboard={handleInitializeDashboard}
+        />
+      )}
+
+      {view === 'dashboard' && (
+        <Dashboard configData={userConfig} />
+      )}
+    </>
+  );
+}
+
+function App() {
   return (
     <div className="App">
       {/*
-        SignedOut / SignedIn are Clerk's own gate components - they render
-        nothing at all on the "wrong" side, so there's no manual auth-state
-        checking needed here. Nobody sees SystemInit, MasterLedgerInit, or
-        Dashboard until Clerk confirms a real session exists.
+        SignedOut / SignedIn are Clerk's own gate components - nobody sees
+        any app content until Clerk confirms a real session exists.
       */}
       <SignedOut>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-          {/* Clerk's <SignIn/> includes a "Sign up" link by default (routing="virtual"
-              handles both flows in one component - no separate SignUp page needed
-              unless you want a dedicated URL for it). */}
           <SignIn routing="virtual" />
         </div>
       </SignedOut>
@@ -40,21 +123,7 @@ function App() {
         <div style={{ position: 'fixed', top: 12, right: 16, zIndex: 1000 }}>
           <UserButton afterSignOutUrl="/" />
         </div>
-
-        {view === 'init' && (
-          <SystemInit onComplete={handleSystemInitComplete} />
-        )}
-
-        {view === 'master' && (
-          <MasterLedgerInit
-            configData={userConfig}
-            onInitializeDashboard={handleInitializeDashboard}
-          />
-        )}
-
-        {view === 'dashboard' && (
-          <Dashboard configData={userConfig} />
-        )}
+        <AuthenticatedApp />
       </SignedIn>
     </div>
   );

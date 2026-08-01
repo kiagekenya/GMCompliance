@@ -10,6 +10,7 @@ const completionLogSchema = new mongoose.Schema({
   operatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Operator', required: true },
   completedDate: { type: Date, required: true },
   completedByContactId: { type: mongoose.Schema.Types.ObjectId, ref: 'Contact', default: null },
+  completedByName: { type: String, default: '' }, // free text fallback - doesn't require an existing Contact record
   evidenceUrl: { type: String, default: null },
   notes: { type: String, default: '' },
 }, { timestamps: true });
