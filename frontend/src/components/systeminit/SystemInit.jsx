@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './SystemInit.css';
 import MasterLedgerInit from '../masterledgerinit/MasterLedgerInit';
-import { signup, isAuthenticated, saveProfile, addContact, addVendor } from '../../api/client';
+import { saveProfile, updateCompany, addContact, addVendor } from '../../api/client';
 
 const STEPS = [
   { key: 1, label: 'Pipeline Asset Profile', hint: 'Pipeline parameters' },
@@ -26,8 +26,6 @@ const SystemInit = ({ onComplete }) => {
 
   const [formData, setFormData] = useState({
     operatorName: 'Yunoya LTD',
-    email: '',
-    password: '',
     county: 'Midland',
     location: 'Permian Basin',
     material: 'Steel',
@@ -132,27 +130,8 @@ const SystemInit = ({ onComplete }) => {
     vendors,
   });
 
-  const handleNext = async () => {
+  const handleNext = () => {
     setSubmitError('');
-
-    // Step 1 -> 2 is where the account actually gets created, since we need
-    // a JWT before any other backend call (profile, contacts, vendors) works.
-    if (activeStep === 1 && !isAuthenticated()) {
-      if (!formData.email || !formData.password) {
-        setSubmitError('Email and password are required to create your account.');
-        return;
-      }
-      setIsSubmitting(true);
-      try {
-        await signup({ companyName: formData.operatorName, email: formData.email, password: formData.password, county: formData.county, location: formData.location });
-      } catch (err) {
-        setSubmitError(err.message);
-        setIsSubmitting(false);
-        return;
-      }
-      setIsSubmitting(false);
-    }
-
     if (activeStep < 4) {
       setActiveStep(activeStep + 1);
     } else if (onComplete) {
@@ -180,6 +159,12 @@ const SystemInit = ({ onComplete }) => {
     setSubmitError('');
     setIsSubmitting(true);
     try {
+      await updateCompany({
+        companyName: formData.operatorName,
+        county: formData.county,
+        location: formData.location,
+      });
+
       await saveProfile({
         assetType: formData.type,
         pipeMaterial: formData.material,
@@ -322,29 +307,6 @@ const SystemInit = ({ onComplete }) => {
                         name="location"
                         className="init-input"
                         value={formData.location}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="init-form-row">
-                    <div className="init-form-group">
-                      <label className="init-label">Account Email</label>
-                      <input
-                        type="email"
-                        name="email"
-                        className="init-input"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="init-form-group">
-                      <label className="init-label">Account Password</label>
-                      <input
-                        type="password"
-                        name="password"
-                        className="init-input"
-                        value={formData.password}
                         onChange={handleInputChange}
                       />
                     </div>

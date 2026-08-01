@@ -1,23 +1,27 @@
 // src/api/client.js
 //
-// Every backend call in the app goes through here. Nothing else in the
-// codebase should call fetch() directly against /api/... - that keeps the
-// base URL, auth header, and error handling in exactly one place.
+// Every backend call in the app goes through here. Auth is now handled by
+// Clerk - there's no custom-issued JWT or localStorage token anymore.
+// window.Clerk is the global Clerk SDK instance that <ClerkProvider> sets
+// up (see src/index.js); getToken() returns the current session's JWT,
+// which our backend verifies with @clerk/backend (see
+// middleware/clerkAuth.js on the server).
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 
-function getToken() {
-  return localStorage.getItem('galaxy_token');
-}
-
-function setToken(token) {
-  localStorage.setItem('galaxy_token', token);
+async function getClerkToken() {
+  if (!window.Clerk || !window.Clerk.session) {
+    throw new Error('Not signed in - no active Clerk session');
+  }
+  return window.Clerk.session.getToken();
 }
 
 async function request(path, { method = 'GET', body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const token = await getClerkToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
 
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -37,18 +41,9 @@ async function request(path, { method = 'GET', body } = {}) {
   return data;
 }
 
-// --- Auth ---
-export const signup = (payload) => request('/auth/signup', { method: 'POST', body: payload }).then((data) => {
-  setToken(data.token);
-  return data;
-});
-
-export const login = (payload) => request('/auth/login', { method: 'POST', body: payload }).then((data) => {
-  setToken(data.token);
-  return data;
-});
-
-export const isAuthenticated = () => Boolean(getToken());
+// --- Auth / account info (identity itself lives in Clerk, not here) ---
+export const getCurrentOperator = () => request('/auth/me');
+export const updateCompany = (payload) => request('/auth/company', { method: 'PATCH', body: payload });
 
 // --- Pipeline profile ---
 export const getProfile = () => request('/profile');
@@ -70,5 +65,3 @@ export const addContact = (payload) => request('/contacts', { method: 'POST', bo
 // --- Vendors ---
 export const listVendors = () => request('/vendors');
 export const addVendor = (payload) => request('/vendors', { method: 'POST', body: payload });
-
-export { setToken, getToken };

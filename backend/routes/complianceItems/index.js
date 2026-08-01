@@ -3,7 +3,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireRole } = require('../../middleware/auth');
+const { requireAuth, requireRole } = require('../../middleware/clerkAuth');
 
 const confirmItems = require('./confirmItems');
 const getItems = require('./getItems');
