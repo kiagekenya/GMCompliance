@@ -1,11 +1,11 @@
 // routes/complianceItems/updateItemStatus.js
 //
 // PATCH /api/compliance-items/:id
-// For metadata edits that are NOT "mark compliant" (that's completeItem.js,
-// since it triggers the scheduling engine and writes to the audit archive):
-// assigning who's responsible for this item, or removing a non-core item.
-// Assigning a contact clears any vendor assignment and vice versa - an item
-// has exactly one owner at a time.
+// This is the "EDIT" action: assign an owner, and/or fill in the draft
+// completion info (date it was actually done + evidence + notes) as the
+// assigned person prepares it. NOTHING here finalizes compliance or writes
+// to the audit archive - that only happens via completeItem.js, which a
+// (possibly different) person triggers once this looks right.
 
 const ComplianceItem = require('../../models/ComplianceItem');
 const RegulatoryRequirement = require('../../models/RegulatoryRequirement');
@@ -39,8 +39,19 @@ const updateItemStatus = asyncHandler(async (req, res) => {
     item.customFrequencyValue = req.body.customFrequencyValue;
   }
 
+  // Draft completion info - the assigned person's prep work, not yet final
+  if (req.body.pendingCompletedDate !== undefined) {
+    item.pendingCompletedDate = req.body.pendingCompletedDate ? new Date(req.body.pendingCompletedDate) : null;
+  }
+  if (req.body.pendingEvidenceUrl !== undefined) {
+    item.pendingEvidenceUrl = req.body.pendingEvidenceUrl || null;
+  }
+  if (req.body.pendingNotes !== undefined) {
+    item.pendingNotes = req.body.pendingNotes || '';
+  }
+
   await item.save();
-  console.log(`[compliance-items] operator ${req.operatorId}: updated item ${item._id} assignment`);
+  console.log(`[compliance-items] operator ${req.operatorId}: edited item ${item._id}`);
 
   const populated = await ComplianceItem.findById(item._id)
     .populate('assignedContactId', 'fullName title')

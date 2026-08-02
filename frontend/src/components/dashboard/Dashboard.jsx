@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './Dashboard.css';
 import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
-import { getComplianceItems, completeComplianceItem, updateComplianceItem, listContacts, getArchive } from '../../api/client';
+import {
+  getComplianceItems, completeComplianceItem, updateComplianceItem,
+  listContacts, addContact, getArchive,
+} from '../../api/client';
 
 // Everything that used to live here (INITIAL_REQUIREMENTS, calculateNextDue,
 // getStatusFromDue, enrichRequirement) is GONE. All dates and statuses now
@@ -20,11 +23,9 @@ const mapStatusForDisplay = (backendStatus) => {
   if (backendStatus === 'due' || backendStatus === 'started') return 'due';
   if (backendStatus === 'compliant' || backendStatus === 'done') return 'compliant';
   if (backendStatus === 'pending') return 'pending';
-  return ''; // awaiting_input -> shown as "Not set" (should not occur in practice)
+  return '';
 };
 
-// Maps one raw ComplianceItem API response into the flat shape this component's
-// table/Dial/RequirementDetail already expect (id, category, citation, etc.)
 const mapItemForDisplay = (item) => ({
   id: item._id,
   requirementId: item.requirementId?._id,
@@ -41,6 +42,9 @@ const mapItemForDisplay = (item) => ({
   requiresOperatorInput: item.requiresOperatorInput,
   lastCompleted: item.lastCompletedDate,
   nextDue: item.nextDueDate,
+  pendingCompletedDate: item.pendingCompletedDate,
+  pendingEvidenceUrl: item.pendingEvidenceUrl,
+  pendingNotes: item.pendingNotes,
   assignedContactId: item.assignedContactId?._id || null,
   assignedContactName: item.assignedContactId?.fullName || null,
   assignedVendorId: item.assignedVendorId?._id || null,
@@ -50,9 +54,8 @@ const mapItemForDisplay = (item) => ({
 });
 
 const formatDate = (dateString) => {
-  if (!dateString) return 'Not set';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  if (!dateString) return '—';
+  return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const Dial = ({ status, size = 28 }) => {
@@ -62,9 +65,7 @@ const Dial = ({ status, size = 28 }) => {
     if (s === 'compliant') return '#3F6B52';
     return '#6B7280';
   };
-
   const color = getStatusColor(status);
-
   let angle = -120;
   if (status === 'compliant') angle = -60;
   if (status === 'due') angle = 0;
@@ -73,10 +74,7 @@ const Dial = ({ status, size = 28 }) => {
   const strokeWidth = size * 0.12;
   const radius = size * 0.38;
   const center = size / 2;
-  const startAngle = -120;
-  const endAngle = 120;
-  const sweep = endAngle - startAngle;
-  const needleAngle = startAngle + (sweep * (angle + 120)) / 240;
+  const needleAngle = -120 + (240 * (angle + 120)) / 240;
   const needleRad = (needleAngle * Math.PI) / 180;
   const needleLength = radius * 0.8;
   const needleX = center + needleLength * Math.cos(needleRad);
@@ -89,9 +87,6 @@ const Dial = ({ status, size = 28 }) => {
       <circle cx={center} cy={center} r={radius * 0.3} fill="none" stroke="#3D5560" strokeWidth={strokeWidth * 0.3} />
       <line x1={center} y1={center} x2={needleX} y2={needleY} stroke={color} strokeWidth={strokeWidth * 0.9} strokeLinecap="round" />
       <circle cx={center} cy={center} r={strokeWidth * 0.8} fill="#14191C" />
-      <path d={`M ${center + radius * Math.cos((-120 * Math.PI) / 180)} ${center + radius * Math.sin((-120 * Math.PI) / 180)} A ${radius} ${radius} 0 0 1 ${center + radius * Math.cos((-60 * Math.PI) / 180)} ${center + radius * Math.sin((-60 * Math.PI) / 180)}`} fill="none" stroke="#3F6B52" strokeWidth={strokeWidth * 0.5} opacity="0.6" />
-      <path d={`M ${center + radius * Math.cos((-20 * Math.PI) / 180)} ${center + radius * Math.sin((-20 * Math.PI) / 180)} A ${radius} ${radius} 0 0 1 ${center + radius * Math.cos((20 * Math.PI) / 180)} ${center + radius * Math.sin((20 * Math.PI) / 180)}`} fill="none" stroke="#C98A1E" strokeWidth={strokeWidth * 0.5} opacity="0.6" />
-      <path d={`M ${center + radius * Math.cos((60 * Math.PI) / 180)} ${center + radius * Math.sin((60 * Math.PI) / 180)} A ${radius} ${radius} 0 0 1 ${center + radius * Math.cos((120 * Math.PI) / 180)} ${center + radius * Math.sin((120 * Math.PI) / 180)}`} fill="none" stroke="#A23E2A" strokeWidth={strokeWidth * 0.5} opacity="0.6" />
     </svg>
   );
 };
@@ -101,12 +96,14 @@ const ComplianceDashboard = ({ configData }) => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [selectedRequirement, setSelectedRequirement] = useState(null);
-  const [, setActiveCategory] = useState(null);
   const [openBreakdownCat, setOpenBreakdownCat] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [mainView, setMainView] = useState('ledger'); // 'ledger' | 'archive'
+  const [mainView, setMainView] = useState('ledger'); // 'ledger' | 'archive' | 'escalation'
   const [archiveEntries, setArchiveEntries] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
+  const [newContact, setNewContact] = useState({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
+  const [addingContact, setAddingContact] = useState(false);
+  const [addContactError, setAddContactError] = useState('');
 
   const vendors = configData?.vendors || [];
 
@@ -155,34 +152,28 @@ const ComplianceDashboard = ({ configData }) => {
     return Array.from(seen.keys()).map((key) => ({ key, label: key }));
   }, [requirements]);
 
-  // "Save" in RequirementDetail sends { lastCompleted, assigned, ... }. If
-  // lastCompleted changed, that's a real completion event - call the backend
-  // completion endpoint (which logs to the audit archive and rolls the
-  // schedule forward), then refresh from the server rather than guessing
-  // the new status/date locally.
-  //
-  // Two distinct kinds of update come from RequirementDetail now:
-  //  'assign'   - who's responsible for this item. Pure metadata, does NOT
-  //               touch status or the audit archive.
-  //  'complete' - the real "mark compliant" action. Logs to the audit
-  //               archive and recomputes the real schedule going forward.
+  // Two distinct kinds of update from RequirementDetail:
+  //  'edit'     - assignment + draft completion info. No status change.
+  //  'complete' - the gated confirm step. The backend itself enforces that
+  //               an owner + evidence already exist (422 if not) - this
+  //               just surfaces that error clearly if it happens.
   const handleRequirementUpdate = async (id, updates) => {
     try {
-      if (updates.kind === 'assign') {
-        const payload = updates.assigneeType === 'vendor'
-          ? { assignedVendorId: updates.assignedId }
-          : { assignedContactId: updates.assignedId };
+      if (updates.kind === 'edit') {
+        const payload = {};
+        if (updates.assignedId) {
+          if (updates.assigneeType === 'vendor') payload.assignedVendorId = updates.assignedId;
+          else payload.assignedContactId = updates.assignedId;
+        }
+        if (updates.pendingCompletedDate !== undefined) payload.pendingCompletedDate = updates.pendingCompletedDate;
+        if (updates.pendingEvidenceUrl !== undefined) payload.pendingEvidenceUrl = updates.pendingEvidenceUrl;
+        if (updates.pendingNotes !== undefined) payload.pendingNotes = updates.pendingNotes;
         await updateComplianceItem(id, payload);
-        console.log(`[Dashboard] assigned item ${id}`, payload);
+        console.log(`[Dashboard] edited item ${id}`, payload);
       } else if (updates.kind === 'complete') {
-        await completeComplianceItem(id, {
-          completedDate: updates.completedDate,
-          completedByName: updates.completedByName,
-          evidenceUrl: updates.evidenceUrl,
-          notes: updates.notes,
-        });
-        console.log(`[Dashboard] marked item ${id} compliant`);
-        fetchArchive(); // keep the archive fresh even if they're not currently viewing it
+        await completeComplianceItem(id, {});
+        console.log(`[Dashboard] confirmed compliant on item ${id}`);
+        fetchArchive();
       }
     } catch (err) {
       console.error('[Dashboard] handleRequirementUpdate failed:', err);
@@ -192,6 +183,49 @@ const ComplianceDashboard = ({ configData }) => {
 
     fetchItems();
     setSelectedRequirement(null);
+  };
+
+  const handleAddContact = async (contactData) => {
+    try {
+      await addContact({
+        fullName: contactData.fullName,
+        title: contactData.title,
+        email: contactData.email,
+        phone: contactData.phone,
+        escalationLevel: contactData.escalationLevel || contacts.length + 1,
+      });
+      console.log('[Dashboard] contact added');
+      fetchContacts();
+    } catch (err) {
+      console.error('[Dashboard] addContact failed:', err);
+      setLoadError(err.message);
+    }
+  };
+
+  const handleSubmitNewContact = async (e) => {
+    e.preventDefault();
+    setAddContactError('');
+    if (!newContact.fullName || !newContact.email) {
+      setAddContactError('Name and email are required.');
+      return;
+    }
+    setAddingContact(true);
+    try {
+      await addContact({
+        fullName: newContact.fullName,
+        title: newContact.title,
+        email: newContact.email,
+        phone: newContact.phone,
+        escalationLevel: Number(newContact.escalationLevel) || contacts.length + 1,
+      });
+      setNewContact({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
+      fetchContacts();
+    } catch (err) {
+      console.error('[Dashboard] addContact failed:', err);
+      setAddContactError(err.message);
+    } finally {
+      setAddingContact(false);
+    }
   };
 
   const categoryStatus = (catKey) => {
@@ -215,7 +249,6 @@ const ComplianceDashboard = ({ configData }) => {
   };
 
   const scrollToCategory = (cat) => {
-    setActiveCategory(cat);
     const el = document.getElementById(`cat-${cat.replace(/\s/g, '')}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -224,9 +257,12 @@ const ComplianceDashboard = ({ configData }) => {
     setOpenBreakdownCat((prev) => (prev === catKey ? null : catKey));
   };
 
+  const goToLedger = () => { setMainView('ledger'); setSelectedRequirement(null); };
+  const goToArchive = () => { setMainView('archive'); fetchArchive(); };
+  const goToEscalation = () => { setMainView('escalation'); fetchContacts(); };
+
   return (
     <div className="app-container">
-      {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
           <img src={CompanyLogo} alt="Galaxy Midstream" className="company-logo" />
@@ -238,11 +274,11 @@ const ComplianceDashboard = ({ configData }) => {
         </div>
 
         <nav className="sidebar-nav">
-          <a href="#calendar" className={mainView === 'ledger' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setMainView('ledger'); setSelectedRequirement(null); }}>
+          <a href="#calendar" className={mainView === 'ledger' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToLedger(); }}>
             <i className="fas fa-calendar-alt" aria-hidden="true"></i>
             <span>CALENDAR</span>
           </a>
-          <a href="#">
+          <a href="#escalation" className={mainView === 'escalation' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToEscalation(); }}>
             <i className="fas fa-arrow-up" aria-hidden="true"></i>
             <span>ESCALATION LADDER</span>
           </a>
@@ -254,17 +290,13 @@ const ComplianceDashboard = ({ configData }) => {
             <i className="fas fa-chart-bar" aria-hidden="true"></i>
             <span>REPORTS</span>
           </a>
-          <a href="#archive" className={mainView === 'archive' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setMainView('archive'); fetchArchive(); }}>
+          <a href="#archive" className={mainView === 'archive' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToArchive(); }}>
             <i className="fas fa-archive" aria-hidden="true"></i>
             <span>AUDIT ARCHIVE</span>
           </a>
           <a href="#">
             <i className="fas fa-cog" aria-hidden="true"></i>
             <span>SYSTEM SETTINGS</span>
-          </a>
-          <a href="#">
-            <i className="fas fa-user-shield" aria-hidden="true"></i>
-            <span>SYSTEM ADMIN</span>
           </a>
         </nav>
 
@@ -273,57 +305,97 @@ const ComplianceDashboard = ({ configData }) => {
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="main-content">
-        {loading && <p style={{ padding: 24 }}>Loading your compliance calendar…</p>}
-        {loadError && <p style={{ padding: 24, color: '#c0392b' }}>{loadError}</p>}
+        {loading && <p>Loading your compliance calendar…</p>}
+        {loadError && <p style={{ color: '#c0392b' }}>⚠ {loadError}</p>}
 
-        {!loading && !loadError && mainView === 'archive' ? (
-          <div style={{ padding: 24 }}>
-            <h2 style={{ marginBottom: 16 }}>Audit Archive</h2>
+        {!loading && !loadError && mainView === 'escalation' && (
+          <>
+            <h2>Escalation Ladder</h2>
+            <div className="ledger-scroll" style={{ height: 'auto' }}>
+              <table>
+                <thead>
+                  <tr><th>Level</th><th>Name</th><th>Title</th><th>Email</th><th>Phone</th></tr>
+                </thead>
+                <tbody>
+                  {contacts.length === 0 ? (
+                    <tr><td colSpan="5" style={{ padding: 16, opacity: 0.7 }}>No contacts yet - add one below.</td></tr>
+                  ) : contacts.map((c) => (
+                    <tr key={c._id}>
+                      <td>{c.escalationLevel}</td>
+                      <td>{c.fullName}</td>
+                      <td>{c.title}</td>
+                      <td>{c.email}</td>
+                      <td>{c.phone}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <form onSubmit={handleSubmitNewContact} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
+              <div className="card-label" style={{ marginBottom: 10 }}>ADD CONTACT</div>
+              {addContactError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addContactError}</p>}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <input placeholder="Full name" value={newContact.fullName} onChange={(e) => setNewContact({ ...newContact, fullName: e.target.value })} />
+                <input placeholder="Title" value={newContact.title} onChange={(e) => setNewContact({ ...newContact, title: e.target.value })} />
+                <input placeholder="Email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
+                <input placeholder="Phone" value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} />
+                <input placeholder="Escalation level (1 = notified first)" type="number" min="1" value={newContact.escalationLevel} onChange={(e) => setNewContact({ ...newContact, escalationLevel: e.target.value })} />
+              </div>
+              <button type="submit" className="action-button save" disabled={addingContact}>
+                {addingContact ? 'ADDING…' : 'ADD CONTACT'}
+              </button>
+            </form>
+          </>
+        )}
+
+        {!loading && !loadError && mainView === 'archive' && (
+          <>
+            <h2>Audit Archive</h2>
             {archiveLoading && <p>Loading archive…</p>}
             {!archiveLoading && archiveEntries.length === 0 && (
               <p style={{ opacity: 0.7 }}>Nothing logged yet. Entries appear here the moment anything is marked compliant.</p>
             )}
             {!archiveLoading && archiveEntries.length > 0 && (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date Completed</th>
-                    <th>Regulation</th>
-                    <th>Category</th>
-                    <th>Completed By</th>
-                    <th>Evidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {archiveEntries.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>{formatDate(entry.completedDate)}</td>
-                      <td>
-                        <strong>{entry.regulationTitle}</strong>
-                        <div style={{ fontSize: 12, opacity: 0.7 }}>{entry.sourceRegulation}</div>
-                      </td>
-                      <td>{entry.categoryName}</td>
-                      <td>{entry.completedBy}</td>
-                      <td>{entry.evidenceUrl || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="ledger-scroll" style={{ height: 'auto' }}>
+                <table>
+                  <thead>
+                    <tr><th>Date Completed</th><th>Regulation</th><th>Category</th><th>Completed By</th><th>Evidence</th></tr>
+                  </thead>
+                  <tbody>
+                    {archiveEntries.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{formatDate(entry.completedDate)}</td>
+                        <td>
+                          <strong>{entry.regulationTitle}</strong>
+                          <div style={{ fontSize: 12, opacity: 0.7 }}>{entry.sourceRegulation}</div>
+                        </td>
+                        <td>{entry.categoryName}</td>
+                        <td>{entry.completedBy}</td>
+                        <td>{entry.evidenceUrl || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </div>
-        ) : !loading && !loadError && selectedRequirement ? (
+          </>
+        )}
+
+        {!loading && !loadError && mainView === 'ledger' && selectedRequirement && (
           <RequirementDetail
             requirement={selectedRequirement}
             onBack={() => setSelectedRequirement(null)}
             onUpdate={handleRequirementUpdate}
+            onAddContact={handleAddContact}
             vendorList={vendors}
             contactList={contacts}
           />
-        ) : (!loading && !loadError && (
+        )}
+
+        {!loading && !loadError && mainView === 'ledger' && !selectedRequirement && (
           <>
-            {/* Route spine */}
             <div className="route-spine-wrapper">
               <div className="route-spine">
                 {CATEGORIES.map((cat, idx) => (
@@ -338,143 +410,96 @@ const ComplianceDashboard = ({ configData }) => {
               </div>
             </div>
 
-            {/* Ledger + Escalation */}
-            <div className="dashboard-grid">
-              <div className="ledger-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 32 }}></th>
-                      <th>Reference</th>
-                      <th>Requirement</th>
-                      <th>Due Date</th>
-                      <th>Assigned To</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {CATEGORIES.map((cat) => {
-                      const items = requirements.filter((r) => r.category === cat.key);
-                      const catStatus = categoryStatus(cat.key);
-                      const counts = categoryBreakdown(cat.key);
-                      const isOpen = openBreakdownCat === cat.key;
-                      return (
-                        <React.Fragment key={cat.key}>
-                          <tr className="category-label" id={`cat-${cat.key.replace(/\s/g, '')}`}>
-                            <td colSpan="6" className="category-label-cell">
-                              <span className="category-header">
-                                <Dial status={catStatus} size={24} />
-                                <strong>{cat.label}</strong>
-                                <button
-                                  type="button"
-                                  className="breakdown-toggle"
-                                  onClick={() => toggleBreakdown(cat.key)}
-                                  aria-expanded={isOpen}
-                                >
-                                  <i className={`fas fa-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden="true"></i>
-                                </button>
-                              </span>
-
-                              {isOpen && (
-                                <div className="category-breakdown-dropdown category-breakdown-dropdown--floating">
-                                  <div className={`cat-count-row cat-count-row--compliant ${counts.compliant === 0 ? 'is-zero' : ''}`}>
-                                    <span className="cat-count-dot"></span>
-                                    <span className="cat-count-name">Compliant</span>
-                                    <span className="cat-count-value">{counts.compliant}</span>
-                                  </div>
-                                  <div className={`cat-count-row cat-count-row--due ${counts.due === 0 ? 'is-zero' : ''}`}>
-                                    <span className="cat-count-dot"></span>
-                                    <span className="cat-count-name">Due</span>
-                                    <span className="cat-count-value">{counts.due}</span>
-                                  </div>
-                                  <div className={`cat-count-row cat-count-row--pastdue ${counts.pastDue === 0 ? 'is-zero' : ''}`}>
-                                    <span className="cat-count-dot"></span>
-                                    <span className="cat-count-name">Past Due</span>
-                                    <span className="cat-count-value">{counts.pastDue}</span>
-                                  </div>
-                                  <div className={`cat-count-row cat-count-row--unset ${counts.unset === 0 ? 'is-zero' : ''}`}>
-                                    <span className="cat-count-dot"></span>
-                                    <span className="cat-count-name">Not Completed</span>
-                                    <span className="cat-count-value">{counts.unset}</span>
-                                  </div>
+            <div className="ledger-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 32 }}></th>
+                    <th>Reference</th>
+                    <th>Requirement</th>
+                    <th>Due Date</th>
+                    <th>Last Completed</th>
+                    <th>Assigned To</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CATEGORIES.map((cat) => {
+                    const items = requirements.filter((r) => r.category === cat.key);
+                    const catStatus = categoryStatus(cat.key);
+                    const counts = categoryBreakdown(cat.key);
+                    const isOpen = openBreakdownCat === cat.key;
+                    return (
+                      <React.Fragment key={cat.key}>
+                        <tr className="category-label" id={`cat-${cat.key.replace(/\s/g, '')}`}>
+                          <td colSpan="7" className="category-label-cell">
+                            <span className="category-header">
+                              <Dial status={catStatus} size={24} />
+                              <strong>{cat.label}</strong>
+                              <button type="button" className="breakdown-toggle" onClick={() => toggleBreakdown(cat.key)} aria-expanded={isOpen}>
+                                <i className={`fas fa-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden="true"></i>
+                              </button>
+                            </span>
+                            {isOpen && (
+                              <div className="category-breakdown-dropdown category-breakdown-dropdown--floating">
+                                <div className={`cat-count-row cat-count-row--compliant ${counts.compliant === 0 ? 'is-zero' : ''}`}>
+                                  <span className="cat-count-dot"></span><span className="cat-count-name">Compliant</span><span className="cat-count-value">{counts.compliant}</span>
                                 </div>
+                                <div className={`cat-count-row cat-count-row--due ${counts.due === 0 ? 'is-zero' : ''}`}>
+                                  <span className="cat-count-dot"></span><span className="cat-count-name">Due</span><span className="cat-count-value">{counts.due}</span>
+                                </div>
+                                <div className={`cat-count-row cat-count-row--pastdue ${counts.pastDue === 0 ? 'is-zero' : ''}`}>
+                                  <span className="cat-count-dot"></span><span className="cat-count-name">Past Due</span><span className="cat-count-value">{counts.pastDue}</span>
+                                </div>
+                                <div className={`cat-count-row cat-count-row--unset ${counts.unset === 0 ? 'is-zero' : ''}`}>
+                                  <span className="cat-count-dot"></span><span className="cat-count-name">Not Completed</span><span className="cat-count-value">{counts.unset}</span>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                        {items.map((req) => (
+                          <tr
+                            key={req.id}
+                            className="clickable-row"
+                            tabIndex={0}
+                            role="button"
+                            onClick={() => setSelectedRequirement(req)}
+                            onKeyDown={(e) => e.key === 'Enter' && setSelectedRequirement(req)}
+                          >
+                            <td className="td-dial"><Dial status={req.status} size={26} /></td>
+                            <td className="td-citation">{req.citation}</td>
+                            <td>
+                              {req.description}
+                              {req.requiresOperatorInput && !req.frequencyValue && (
+                                <span style={{ marginLeft: 8, color: '#C98A1E', fontSize: 11 }}>⚠ needs interval</span>
+                              )}
+                            </td>
+                            <td className="td-due">{formatDate(req.nextDue)}</td>
+                            <td className="td-due">{formatDate(req.pendingCompletedDate || req.lastCompleted)}</td>
+                            <td className="td-assign">{req.assigned}</td>
+                            <td className="td-status">
+                              {req.status === 'pending' ? (
+                                <><span className="status-dot" style={{ background: '#6B7280' }}></span>Not completed</>
+                              ) : req.status ? (
+                                <>
+                                  <span className="status-dot" style={{ background: req.status === 'past due' ? '#A23E2A' : req.status === 'due' ? '#C98A1E' : '#3F6B52' }}></span>
+                                  {req.status}
+                                </>
+                              ) : (
+                                <span className="status-unset">Not set</span>
                               )}
                             </td>
                           </tr>
-                          {items.map((req) => (
-                            <tr
-                              key={req.id}
-                              className="clickable-row"
-                              tabIndex={0}
-                              role="button"
-                              onClick={() => setSelectedRequirement(req)}
-                              onKeyDown={(e) => e.key === 'Enter' && setSelectedRequirement(req)}
-                            >
-                              <td className="td-dial"><Dial status={req.status} size={26} /></td>
-                              <td className="td-citation">{req.citation}</td>
-                              <td>
-                                {req.description}
-                                {req.requiresOperatorInput && !req.frequencyValue && (
-                                  <span style={{ marginLeft: 8, color: '#C98A1E', fontSize: 11 }}>⚠ needs interval</span>
-                                )}
-                              </td>
-                              <td className="td-due">{req.nextDue ? formatDate(req.nextDue) : 'Not completed yet'}</td>
-                              <td className="td-assign">{req.assigned || 'Unassigned'}</td>
-                              <td className="td-status">
-                                {req.status === 'pending' ? (
-                                  <>
-                                    <span className="status-dot" style={{ background: '#6B7280' }}></span>
-                                    Not completed — click to mark done
-                                  </>
-                                ) : req.status ? (
-                                  <>
-                                    <span
-                                      className="status-dot"
-                                      style={{
-                                        background:
-                                          req.status === 'past due' ? '#A23E2A' :
-                                          req.status === 'due' ? '#C98A1E' : '#3F6B52',
-                                      }}
-                                    ></span>
-                                    {req.status}
-                                  </>
-                                ) : (
-                                  <span className="status-unset">Not set</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Escalation ladder - real contacts, sorted by escalationLevel
-                  (1 = notified first, highest number = notified last / on overdue) */}
-              <div className="escalation-rail">
-                <h4>Escalation Ladder</h4>
-                {contacts.length === 0 ? (
-                  <p style={{ padding: '8px 12px', fontSize: 12, opacity: 0.7 }}>
-                    No contacts on file yet.
-                  </p>
-                ) : (
-                  <ol style={{ listStyle: 'none', margin: 0, padding: '8px 12px' }}>
-                    {contacts.map((c) => (
-                      <li key={c._id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: 11, opacity: 0.6 }}>LEVEL {c.escalationLevel}</div>
-                        <div style={{ fontWeight: 600 }}>{c.fullName}</div>
-                        <div style={{ fontSize: 12, opacity: 0.8 }}>{c.title}</div>
-                        <div style={{ fontSize: 12, opacity: 0.6 }}>{c.email}</div>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </>
-        ))}
+        )}
       </main>
     </div>
   );

@@ -49,6 +49,16 @@ const complianceItemSchema = new mongoose.Schema({
 
   assignedVendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', default: null },
   assignedContactId: { type: mongoose.Schema.Types.ObjectId, ref: 'Contact', default: null }, // internal employee, as an alternative to a vendor
+
+  // "Pending" fields: filled in by whoever did the work (via the EDIT panel),
+  // but NOT yet finalized. Nothing here changes status or writes to the
+  // audit archive. MARK COMPLIANT (a separate, gated action - see
+  // completeItem.js) is what a second person clicks once these look right;
+  // that's what actually finalizes things and clears these back to null.
+  pendingCompletedDate: { type: Date, default: null },
+  pendingEvidenceUrl: { type: String, default: null },
+  pendingNotes: { type: String, default: '' },
+
   lastCompletedDate: { type: Date, default: null },
   completedEvidenceUrl: { type: String, default: null },
 }, { timestamps: true });
