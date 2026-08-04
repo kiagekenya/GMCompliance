@@ -5,6 +5,7 @@ import { SignedIn, SignedOut, SignIn, UserButton, useUser } from '@clerk/clerk-r
 import SystemInit from './components/systeminit/SystemInit';
 import MasterLedgerInit from './components/masterledgerinit/MasterLedgerInit';
 import Dashboard from './components/dashboard/Dashboard';
+import PublicUpload from './components/publicupload/PublicUpload';
 import { getCurrentOperator, getProfile, getComplianceItems, listVendors } from './api/client';
 
 function AuthenticatedApp() {
@@ -107,6 +108,14 @@ function AuthenticatedApp() {
 }
 
 function App() {
+  // The upload link sent by email points at /upload/:token - this must be
+  // reachable by someone with NO Clerk account at all, so it's checked and
+  // rendered before the SignedIn/SignedOut gate below ever runs.
+  const uploadMatch = window.location.pathname.match(/^\/upload\/([a-f0-9]+)$/i);
+  if (uploadMatch) {
+    return <PublicUpload token={uploadMatch[1]} />;
+  }
+
   return (
     <div className="App">
       {/*

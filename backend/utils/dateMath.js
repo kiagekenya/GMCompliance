@@ -27,8 +27,17 @@ function computeActionWindowMonths(frequencyValue, frequencyUnit) {
 // Only call this for items NOT manually set to 'started' or 'done' - those
 // two are operator-controlled states that the automatic scheduler must
 // never silently overwrite (see services/schedulingEngine.js).
-function computeStatus(nextDueDate, actionWindowMonths) {
-  if (!nextDueDate) return 'awaiting_input';
+//
+// everCompleted matters a lot here: a due date can ALWAYS trigger 'due' or
+// 'past_due' automatically - that's the entire point of the app, warning
+// about upcoming/missed deadlines regardless of history. But 'compliant'
+// (the green, reassuring state) may ONLY appear for an item that has
+// actually been completed at least once - never as a default for
+// "nothing's happened yet and the math says there's time." An item that's
+// never been done and isn't due soon shows 'pending' instead - distinct
+// from 'compliant' on purpose.
+function computeStatus(nextDueDate, actionWindowMonths, everCompleted = false) {
+  if (!nextDueDate) return 'pending';
 
   const now = new Date();
   const msPerDay = 1000 * 60 * 60 * 24;
@@ -37,7 +46,7 @@ function computeStatus(nextDueDate, actionWindowMonths) {
 
   if (daysUntilDue < 0) return 'past_due';
   if (daysUntilDue <= actionWindowDays) return 'due';   // inside the Action Window - notifications active
-  return 'compliant';                                    // Passive Window - no notifications yet
+  return everCompleted ? 'compliant' : 'pending';        // Passive Window - but only "compliant" if it's real
 }
 
 module.exports = { addFrequencyToDate, computeActionWindowMonths, computeStatus };

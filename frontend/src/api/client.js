@@ -64,6 +64,7 @@ async function request(path, { method = 'GET', body } = {}) {
 // --- Auth / account info (identity itself lives in Clerk, not here) ---
 export const getCurrentOperator = () => request('/auth/me');
 export const updateCompany = (payload) => request('/auth/company', { method: 'PATCH', body: payload });
+export const notifySetupComplete = () => request('/auth/notify-setup-complete', { method: 'POST' });
 
 // --- Pipeline profile ---
 export const getProfile = () => request('/profile');

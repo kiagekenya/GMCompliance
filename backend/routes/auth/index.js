@@ -9,9 +9,11 @@ const { requireAuth } = require('../../middleware/clerkAuth');
 
 const me = require('./me');
 const updateCompany = require('./updateCompany');
+const notifySetupComplete = require('./notifySetupComplete');
 
 router.use(requireAuth);
 router.get('/me', me);
 router.patch('/company', updateCompany);
+router.post('/notify-setup-complete', notifySetupComplete);
 
 module.exports = router;

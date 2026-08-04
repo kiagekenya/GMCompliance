@@ -4,18 +4,10 @@ import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
 import {
   getComplianceItems, completeComplianceItem, updateComplianceItem,
-  listContacts, addContact, getArchive,
+  listContacts, addContact, getArchive, listVendors, addVendor,
 } from '../../api/client';
 
-// Everything that used to live here (INITIAL_REQUIREMENTS, calculateNextDue,
-// getStatusFromDue, enrichRequirement) is GONE. All dates and statuses now
-// come pre-computed from GET /compliance-items - the backend's scheduling
-// engine is the single source of truth, so there is no client-side date math
-// left in this file at all.
-
-// Backend status values (pending | awaiting_input | compliant | due | started |
-// done | past_due) map onto 4 display states. 'pending' is the default for
-// every newly created item - it means "never completed," which is
+// 'pending' is the honest default for a never-completed item - it is
 // deliberately NOT the same visual state as 'compliant'. A fresh install
 // should show everything as not-yet-done, not falsely green.
 const mapStatusForDisplay = (backendStatus) => {
@@ -98,14 +90,17 @@ const ComplianceDashboard = ({ configData }) => {
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [openBreakdownCat, setOpenBreakdownCat] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [mainView, setMainView] = useState('ledger'); // 'ledger' | 'archive' | 'escalation'
+  const [mainView, setMainView] = useState('ledger'); // 'ledger' | 'archive' | 'escalation' | 'vendors'
   const [archiveEntries, setArchiveEntries] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [newContact, setNewContact] = useState({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
   const [addingContact, setAddingContact] = useState(false);
   const [addContactError, setAddContactError] = useState('');
 
-  const vendors = configData?.vendors || [];
+  const [vendorList, setVendorList] = useState(configData?.vendors || []);
+  const [newVendor, setNewVendor] = useState({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '' });
+  const [addingVendor, setAddingVendor] = useState(false);
+  const [addVendorError, setAddVendorError] = useState('');
 
   const fetchItems = () => {
     setLoading(true);
@@ -138,14 +133,18 @@ const ComplianceDashboard = ({ configData }) => {
       .finally(() => setArchiveLoading(false));
   };
 
+  const fetchVendors = () => {
+    listVendors()
+      .then((data) => setVendorList(data.vendors || []))
+      .catch((err) => console.error('[Dashboard] listVendors failed:', err));
+  };
+
   useEffect(() => {
     fetchItems();
     fetchContacts();
+    fetchVendors();
   }, []);
 
-  // The category list is now derived from whatever the backend actually
-  // returned, instead of a hardcoded 6-entry array - so it never drifts out
-  // of sync with the real catalog again.
   const CATEGORIES = useMemo(() => {
     const seen = new Map();
     requirements.forEach((r) => { if (!seen.has(r.category)) seen.set(r.category, r.category); });
@@ -205,8 +204,8 @@ const ComplianceDashboard = ({ configData }) => {
   const handleSubmitNewContact = async (e) => {
     e.preventDefault();
     setAddContactError('');
-    if (!newContact.fullName || !newContact.email) {
-      setAddContactError('Name and email are required.');
+    if (!newContact.fullName || !newContact.email || !newContact.phone) {
+      setAddContactError('Name, email, and phone are all required.');
       return;
     }
     setAddingContact(true);
@@ -260,6 +259,27 @@ const ComplianceDashboard = ({ configData }) => {
   const goToLedger = () => { setMainView('ledger'); setSelectedRequirement(null); };
   const goToArchive = () => { setMainView('archive'); fetchArchive(); };
   const goToEscalation = () => { setMainView('escalation'); fetchContacts(); };
+  const goToVendors = () => { setMainView('vendors'); fetchVendors(); };
+
+  const handleSubmitNewVendor = async (e) => {
+    e.preventDefault();
+    setAddVendorError('');
+    if (!newVendor.companyName) {
+      setAddVendorError('Company name is required.');
+      return;
+    }
+    setAddingVendor(true);
+    try {
+      await addVendor(newVendor);
+      setNewVendor({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '' });
+      fetchVendors();
+    } catch (err) {
+      console.error('[Dashboard] addVendor failed:', err);
+      setAddVendorError(err.message);
+    } finally {
+      setAddingVendor(false);
+    }
+  };
 
   return (
     <div className="app-container">
@@ -282,7 +302,7 @@ const ComplianceDashboard = ({ configData }) => {
             <i className="fas fa-arrow-up" aria-hidden="true"></i>
             <span>ESCALATION LADDER</span>
           </a>
-          <a href="#">
+          <a href="#vendors" className={mainView === 'vendors' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToVendors(); }}>
             <i className="fas fa-store" aria-hidden="true"></i>
             <span>VENDORS</span>
           </a>
@@ -350,6 +370,47 @@ const ComplianceDashboard = ({ configData }) => {
           </>
         )}
 
+        {!loading && !loadError && mainView === 'vendors' && (
+          <>
+            <h2>Vendors</h2>
+            <div className="ledger-scroll" style={{ height: 'auto' }}>
+              <table>
+                <thead>
+                  <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th></tr>
+                </thead>
+                <tbody>
+                  {vendorList.length === 0 ? (
+                    <tr><td colSpan="5" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
+                  ) : vendorList.map((v) => (
+                    <tr key={v._id || v.id}>
+                      <td>{v.companyName}</td>
+                      <td>{v.personnelName}</td>
+                      <td>{v.email}</td>
+                      <td>{v.phone}</td>
+                      <td>{v.serviceScope}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <form onSubmit={handleSubmitNewVendor} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
+              <div className="card-label" style={{ marginBottom: 10 }}>ADD VENDOR</div>
+              {addVendorError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addVendorError}</p>}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <input placeholder="Company name" value={newVendor.companyName} onChange={(e) => setNewVendor({ ...newVendor, companyName: e.target.value })} />
+                <input placeholder="Contact person" value={newVendor.personnelName} onChange={(e) => setNewVendor({ ...newVendor, personnelName: e.target.value })} />
+                <input placeholder="Email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} />
+                <input placeholder="Phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} />
+                <input placeholder="Service scope (e.g. Cathodic Protection Testing)" value={newVendor.serviceScope} onChange={(e) => setNewVendor({ ...newVendor, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
+              </div>
+              <button type="submit" className="action-button save" disabled={addingVendor}>
+                {addingVendor ? 'ADDING…' : 'ADD VENDOR'}
+              </button>
+            </form>
+          </>
+        )}
+
         {!loading && !loadError && mainView === 'archive' && (
           <>
             <h2>Audit Archive</h2>
@@ -389,7 +450,7 @@ const ComplianceDashboard = ({ configData }) => {
             onBack={() => setSelectedRequirement(null)}
             onUpdate={handleRequirementUpdate}
             onAddContact={handleAddContact}
-            vendorList={vendors}
+            vendorList={vendorList}
             contactList={contacts}
           />
         )}

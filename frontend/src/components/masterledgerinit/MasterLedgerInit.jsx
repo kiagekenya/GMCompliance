@@ -12,7 +12,7 @@
 import React, { useEffect, useState } from 'react';
 import './MasterLedgerInit.css';
 import CompanyLogo from "../../../src/assets/gm_edited.jpg";
-import { getSuggestedRequirements, confirmComplianceItems } from '../../api/client';
+import { getSuggestedRequirements, confirmComplianceItems, notifySetupComplete } from '../../api/client';
 
 const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
   const {
@@ -112,6 +112,7 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
     try {
       await confirmComplianceItems(items);
       console.log('[MasterLedgerInit] calendar confirmed successfully');
+      notifySetupComplete().catch((err) => console.error('[MasterLedgerInit] notifySetupComplete failed (non-blocking):', err));
       onInitializeDashboard(configData);
     } catch (err) {
       console.error('[MasterLedgerInit] confirmComplianceItems failed:', err);

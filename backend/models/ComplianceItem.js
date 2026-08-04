@@ -26,10 +26,13 @@ const complianceItemSchema = new mongoose.Schema({
   nextDueDate: { type: Date, default: null },
   actionWindowMonths: { type: Number, default: null },
 
-  // pending        = created but never yet completed - no anchor/due date exists.
-  //                  THIS IS THE DEFAULT for every new item. It is deliberately
-  //                  not "compliant" - a freshly created item means nothing has
-  //                  actually been done yet, only that it's been added to track.
+  // pending        = never yet completed. nextDueDate IS computed and shown
+  //                  from creation - only anchorDate/lastCompletedDate stay
+  //                  null until a real completion happens. This is the
+  //                  DEFAULT for every new item, and deliberately distinct
+  //                  from 'compliant' - due-date math is informational from
+  //                  day one, but the green "compliant" state has to be
+  //                  earned by an actual completion, never assumed.
   // awaiting_input = reserved for operator_defined items missing a frequency
   //                  (in practice this shouldn't occur - confirmItems.js
   //                  validates the value exists before an item is ever created)
@@ -58,6 +61,12 @@ const complianceItemSchema = new mongoose.Schema({
   pendingCompletedDate: { type: Date, default: null },
   pendingEvidenceUrl: { type: String, default: null },
   pendingNotes: { type: String, default: '' },
+
+  // Lets an assigned person (who may have no system account at all) submit
+  // evidence through a plain link, no login required. Regenerated every
+  // time the assignment changes, so an old link can't be reused for a new
+  // assignee. See routes/public/ for the unauthenticated endpoints this backs.
+  uploadToken: { type: String, default: null, unique: true, sparse: true },
 
   lastCompletedDate: { type: Date, default: null },
   completedEvidenceUrl: { type: String, default: null },

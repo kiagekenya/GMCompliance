@@ -23,6 +23,7 @@ const SystemInit = ({ onComplete }) => {
   const [activeStep, setActiveStep] = useState(1);
   const [showMasterLedger, setShowMasterLedger] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
+  const [showClassInfo, setShowClassInfo] = useState(false);
 
   const [formData, setFormData] = useState({
     operatorName: 'Yunoya LTD',
@@ -67,6 +68,13 @@ const SystemInit = ({ onComplete }) => {
       email: 'jacobkiage4@gmail.com',
       phone: '0741357536',
     },
+    {
+      id: 2,
+      name: '',
+      role: 'Manager',
+      email: '',
+      phone: '',
+    },
   ]);
 
   // Vendor state initialized with Galaxy Midstream as default
@@ -93,7 +101,7 @@ const SystemInit = ({ onComplete }) => {
   };
 
   const removeContact = (id) => {
-    if (contacts.length > 1) {
+    if (contacts.length > 2) {
       setContacts(contacts.filter((c) => c.id !== id));
     }
   };
@@ -132,6 +140,18 @@ const SystemInit = ({ onComplete }) => {
 
   const handleNext = () => {
     setSubmitError('');
+
+    if (activeStep === 2) {
+      const completeContacts = contacts.filter((c) => c.name && c.email && c.phone);
+      if (completeContacts.length < 2) {
+        setSubmitError(
+          `Add at least 2 contacts with name, email, and phone before continuing (you have ${completeContacts.length}) - ` +
+          `the escalation ladder needs at minimum a field/office contact and a manager.`
+        );
+        return;
+      }
+    }
+
     if (activeStep < 4) {
       setActiveStep(activeStep + 1);
     } else if (onComplete) {
@@ -191,7 +211,7 @@ const SystemInit = ({ onComplete }) => {
       // Contacts need escalationLevel = position in the list (1 = notified first)
       for (let i = 0; i < contacts.length; i += 1) {
         const c = contacts[i];
-        if (!c.name || !c.email) continue; // skip incomplete rows rather than fail the whole setup
+        if (!c.name || !c.email || !c.phone) continue; // skip incomplete rows rather than fail the whole setup
         await addContact({ fullName: c.name, title: c.role, email: c.email, phone: c.phone, escalationLevel: i + 1 });
       }
 
@@ -341,7 +361,37 @@ const SystemInit = ({ onComplete }) => {
                   </div>
 
                   <div className="init-form-group">
-                    <label className="init-label">Class Location</label>
+                    <div className="contacts-hint-row">
+                      <label className="init-label" style={{ margin: 0 }}>Class Location</label>
+                      <button
+                        type="button"
+                        className="contacts-info-icon"
+                        onClick={() => setShowClassInfo((prev) => !prev)}
+                        aria-label="Class location info"
+                      >
+                        ⓘ
+                      </button>
+                      {showClassInfo && (
+                        <div className="contacts-info-tooltip">
+                          <p>
+                            Class Location is a federal safety classification (49 CFR §192.5)
+                            based on how many buildings intended for human occupancy sit near your
+                            pipeline - it's about population density, not pipe quality.
+                          </p>
+                          <p style={{ marginTop: 6 }}>
+                            <strong>Class 1</strong>: rural, sparse population (fewest safeguards required).<br/>
+                            <strong>Class 2</strong>: fringe/outskirts of a populated area.<br/>
+                            <strong>Class 3</strong>: populated area (subdivisions, shopping areas).<br/>
+                            <strong>Class 4</strong>: dense area with multi-story buildings (strictest safeguards).
+                          </p>
+                          <p style={{ marginTop: 6 }}>
+                            Higher classes mean more people nearby, so the regulations require
+                            checking your pipeline more often - this directly sets how frequently
+                            things like patrols and leak surveys are required.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                     <select
                       name="classLocation"
                       className="init-select"

@@ -14,8 +14,9 @@ const MAX_CONTACTS = 10;
 const addContact = asyncHandler(async (req, res) => {
   const { fullName, title, email, phone, escalationLevel, accessRole } = req.body;
 
-  if (!fullName || !email || escalationLevel === undefined) {
-    return res.status(422).json({ error: 'fullName, email, and escalationLevel are required' });
+  if (!fullName || !email || !phone || escalationLevel === undefined) {
+    console.warn(`[contacts] operator ${req.operatorId}: rejected - missing required field`, req.body);
+    return res.status(422).json({ error: 'fullName, email, phone, and escalationLevel are required' });
   }
 
   const existingCount = await Contact.countDocuments({ operatorId: req.operatorId });
@@ -27,6 +28,7 @@ const addContact = asyncHandler(async (req, res) => {
     operatorId: req.operatorId, fullName, title, email, phone, escalationLevel, accessRole,
   });
 
+  console.log(`[contacts] operator ${req.operatorId}: added contact ${contact.fullName} (level ${contact.escalationLevel})`);
   res.status(201).json(contact);
 });
 
