@@ -42,6 +42,7 @@ const updateItemStatus = asyncHandler(async (req, res) => {
   if (req.body.assignedContactId !== undefined) {
     item.assignedContactId = req.body.assignedContactId || null;
     item.assignedVendorId = null; // one owner at a time
+    item.assignedAt = item.assignedContactId ? new Date() : null;
     if (item.assignedContactId) {
       const contact = await Contact.findById(item.assignedContactId);
       if (contact) { newlyAssignedEmail = contact.email; newlyAssignedName = contact.fullName; }
@@ -50,6 +51,7 @@ const updateItemStatus = asyncHandler(async (req, res) => {
   if (req.body.assignedVendorId !== undefined) {
     item.assignedVendorId = req.body.assignedVendorId || null;
     item.assignedContactId = null;
+    item.assignedAt = item.assignedVendorId ? new Date() : null;
     if (item.assignedVendorId) {
       const vendor = await Vendor.findById(item.assignedVendorId);
       if (vendor) { newlyAssignedEmail = vendor.email; newlyAssignedName = vendor.personnelName || vendor.companyName; }
@@ -59,11 +61,17 @@ const updateItemStatus = asyncHandler(async (req, res) => {
     item.customFrequencyValue = req.body.customFrequencyValue;
   }
 
-  if (req.body.pendingCompletedDate !== undefined) {
-    item.pendingCompletedDate = req.body.pendingCompletedDate ? new Date(req.body.pendingCompletedDate) : null;
-  }
-  if (req.body.pendingEvidenceUrl !== undefined) {
-    item.pendingEvidenceUrl = req.body.pendingEvidenceUrl || null;
+  // No manual date picker for this anymore (see RequirementDetail.jsx) -
+  // a date only means something once real evidence exists. If evidence is
+  // being attached here without an explicit date, default to today rather
+  // than asking the admin to pick one during what's really an assignment
+  // action. The assignee's own public upload link still lets THEM pick the
+  // real date they did the work, which is more accurate when available.
+  if (req.body.pendingEvidenceUrls !== undefined) {
+    item.pendingEvidenceUrls = Array.isArray(req.body.pendingEvidenceUrls) ? req.body.pendingEvidenceUrls : [];
+    if (item.pendingEvidenceUrls.length > 0 && !item.pendingCompletedDate) {
+      item.pendingCompletedDate = new Date();
+    }
   }
   if (req.body.pendingNotes !== undefined) {
     item.pendingNotes = req.body.pendingNotes || '';

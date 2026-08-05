@@ -27,7 +27,7 @@ const getArchive = asyncHandler(async (req, res) => {
     sourceRegulation: log.complianceItemId?.requirementId?.sourceRegulation || '',
     categoryName: log.complianceItemId?.requirementId?.categoryName || '',
     completedBy: log.completedByContactId?.fullName || log.completedByName || 'Unspecified',
-    evidenceUrl: log.evidenceUrl,
+    evidenceUrls: log.evidenceUrls || [],
     notes: log.notes,
   }));
 

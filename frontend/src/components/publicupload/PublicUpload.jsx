@@ -1,11 +1,10 @@
 // PublicUpload.jsx
 //
-// This page is NOT behind Clerk's sign-in gate (see App.js - it's rendered
-// based on the URL path, before the SignedIn/SignedOut check even runs).
-// It's what an assigned person with no system account lands on after
-// clicking the link in their assignment email. Submitting here only fills
-// in the draft ("pending") fields on the item - an admin still has to
-// review it and click MARK COMPLIANT separately inside the real app.
+// Not behind Clerk's sign-in gate (see App.js). What an assigned person
+// with no system account lands on after clicking their assignment email.
+// Supports attaching multiple files, each individually removable before
+// submitting. Submitting only fills draft fields - an admin still reviews
+// and clicks MARK COMPLIANT separately inside the real app.
 
 import React, { useEffect, useState } from 'react';
 
@@ -15,7 +14,7 @@ const PublicUpload = ({ token }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [info, setInfo] = useState(null);
-  const [fileName, setFileName] = useState('');
+  const [files, setFiles] = useState([]);
   const [completedDate, setCompletedDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -27,6 +26,7 @@ const PublicUpload = ({ token }) => {
       .then(({ ok, data }) => {
         if (!ok) throw new Error(data.error || 'This link is invalid.');
         setInfo(data);
+        setFiles(data.existingFiles || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -37,14 +37,17 @@ const PublicUpload = ({ token }) => {
   }, [token]);
 
   const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) setFileName(file.name);
+    const newNames = Array.from(e.target.files).map((f) => f.name);
+    setFiles((prev) => [...new Set([...prev, ...newNames])]);
+    e.target.value = '';
   };
+
+  const removeFile = (name) => setFiles((prev) => prev.filter((f) => f !== name));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!fileName) {
-      setError('Please attach a file first.');
+    if (files.length === 0) {
+      setError('Please attach at least one file first.');
       return;
     }
     setSubmitting(true);
@@ -53,7 +56,7 @@ const PublicUpload = ({ token }) => {
       const res = await fetch(`${BASE_URL}/public/upload/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ evidenceUrl: fileName, notes, completedDate }),
+        body: JSON.stringify({ evidenceUrls: files, notes, completedDate }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Submission failed.');
@@ -88,7 +91,7 @@ const PublicUpload = ({ token }) => {
       <p>Due: {info.nextDueDate ? new Date(info.nextDueDate).toLocaleDateString() : 'not set'}</p>
 
       {info.alreadySubmitted && (
-        <p style={{ color: '#C98A1E' }}>A submission already exists for this - uploading again will replace it.</p>
+        <p style={{ color: '#C98A1E' }}>You already submitted something for this - you can add more files below or remove ones you no longer want.</p>
       )}
 
       <form onSubmit={handleSubmit} style={{ marginTop: 20 }}>
@@ -104,10 +107,21 @@ const PublicUpload = ({ token }) => {
           <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ display: 'block', width: '100%', padding: 8, marginTop: 4 }} />
         </label>
 
-        <label style={{ display: 'block', padding: 12, border: '1px dashed #999', textAlign: 'center', cursor: 'pointer', marginBottom: 16 }}>
-          {fileName || 'Click to attach evidence'}
-          <input type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+        <label style={{ display: 'block', padding: 12, border: '1px dashed #999', textAlign: 'center', cursor: 'pointer', marginBottom: 12 }}>
+          Click to attach evidence (you can select several)
+          <input type="file" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
         </label>
+
+        {files.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            {files.map((f) => (
+              <div key={f} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#f2f2f2', borderRadius: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 13 }}>📎 {f}</span>
+                <button type="button" onClick={() => removeFile(f)} style={{ border: 'none', background: 'none', color: '#c0392b', cursor: 'pointer' }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <button type="submit" disabled={submitting} style={{ width: '100%', padding: 12, fontWeight: 600 }}>
           {submitting ? 'SUBMITTING…' : 'SUBMIT'}

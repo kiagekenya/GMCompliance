@@ -52,6 +52,7 @@ const complianceItemSchema = new mongoose.Schema({
 
   assignedVendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', default: null },
   assignedContactId: { type: mongoose.Schema.Types.ObjectId, ref: 'Contact', default: null }, // internal employee, as an alternative to a vendor
+  assignedAt: { type: Date, default: null }, // when the CURRENT owner was assigned - NOT a completion date
 
   // "Pending" fields: filled in by whoever did the work (via the EDIT panel),
   // but NOT yet finalized. Nothing here changes status or writes to the
@@ -59,7 +60,7 @@ const complianceItemSchema = new mongoose.Schema({
   // completeItem.js) is what a second person clicks once these look right;
   // that's what actually finalizes things and clears these back to null.
   pendingCompletedDate: { type: Date, default: null },
-  pendingEvidenceUrl: { type: String, default: null },
+  pendingEvidenceUrls: { type: [String], default: [] },
   pendingNotes: { type: String, default: '' },
 
   // Lets an assigned person (who may have no system account at all) submit
@@ -69,7 +70,7 @@ const complianceItemSchema = new mongoose.Schema({
   uploadToken: { type: String, default: null, unique: true, sparse: true },
 
   lastCompletedDate: { type: Date, default: null },
-  completedEvidenceUrl: { type: String, default: null },
+  completedEvidenceUrls: { type: [String], default: [] },
 }, { timestamps: true });
 
 complianceItemSchema.index({ operatorId: 1, nextDueDate: 1 });

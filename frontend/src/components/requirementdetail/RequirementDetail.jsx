@@ -1,16 +1,11 @@
 // RequirementDetail.jsx
 //
-// Two-step workflow, matching how this actually works in practice:
-//
-//  1. EDIT - the assigned person (or anyone) fills in: who's responsible,
-//     the date the work was actually done, and evidence. Saving this does
-//     NOT change compliance status - it's just prep/draft info.
-//
-//  2. MARK COMPLIANT - a gated confirm step. Disabled until an owner is
-//     assigned AND evidence is attached. Someone (often a different
-//     person - a reviewer) clicks this once everything looks right, which
-//     finalizes the completion, writes it to the audit archive, and is the
-//     only thing that actually changes the status shown on the dashboard.
+// Two-step workflow:
+//  1. EDIT - assign an owner, set the date work was done, attach evidence
+//     (multiple files supported - add or remove any of them before saving).
+//     Does NOT change status.
+//  2. MARK COMPLIANT - gated: disabled until an owner is assigned AND at
+//     least one evidence file is attached. Finalizes the completion.
 
 import React, { useState } from 'react';
 import './RequirementDetail.css';
@@ -24,10 +19,14 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
   const currentAssignedId = assigneeType === 'vendor' ? requirement.assignedVendorId : requirement.assignedContactId;
   const [selectedId, setSelectedId] = useState(currentAssignedId || CUSTOM_VALUE);
 
-  const [completedDate, setCompletedDate] = useState(
-    (requirement.pendingCompletedDate || requirement.lastCompleted || '').slice(0, 10)
-  );
-  const [evidenceFileName, setEvidenceFileName] = useState(requirement.pendingEvidenceUrl || '');
+  // No manual date picker here anymore - a date only means something once
+  // real evidence exists, and the backend auto-stamps "today" if evidence
+  // is attached here without one. See the "Assigned On" display instead,
+  // which is a separate, honest timestamp of when the assignment happened.
+
+  // Multiple evidence files - an array of file names (placeholder for real
+  // storage), each individually removable before saving.
+  const [evidenceFiles, setEvidenceFiles] = useState(requirement.pendingEvidenceUrls || []);
   const [notes, setNotes] = useState(requirement.pendingNotes || '');
 
   const [showAddContact, setShowAddContact] = useState(false);
@@ -39,7 +38,7 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
   const currentOptions = assigneeType === 'employee' ? employeeOptions : vendorOptions;
 
   const hasOwner = Boolean(requirement.assignedContactId || requirement.assignedVendorId);
-  const hasEvidence = Boolean(requirement.pendingEvidenceUrl);
+  const hasEvidence = (requirement.pendingEvidenceUrls || []).length > 0;
   const canMarkCompliant = hasOwner && hasEvidence;
 
   const formatDate = (dateString) => {
@@ -48,10 +47,16 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
   };
 
   const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    // NOTE: this captures the file NAME only, as a placeholder - real file
-    // storage (e.g. S3) is a follow-up. evidenceUrl is just the file name.
-    if (file) setEvidenceFileName(file.name);
+    // NOTE: this captures file NAMES only, as a placeholder - real file
+    // storage (e.g. S3) is a follow-up. Supports selecting several at once,
+    // and running it again just adds more (dedup by name).
+    const newNames = Array.from(event.target.files).map((f) => f.name);
+    setEvidenceFiles((prev) => [...new Set([...prev, ...newNames])]);
+    event.target.value = ''; // allow re-selecting the same file name later
+  };
+
+  const removeEvidenceFile = (name) => {
+    setEvidenceFiles((prev) => prev.filter((f) => f !== name));
   };
 
   const handleSaveEdit = () => {
@@ -59,8 +64,7 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
       kind: 'edit',
       assigneeType: selectedId === CUSTOM_VALUE ? undefined : assigneeType,
       assignedId: selectedId === CUSTOM_VALUE ? undefined : selectedId,
-      pendingCompletedDate: completedDate || undefined,
-      pendingEvidenceUrl: evidenceFileName || undefined,
+      pendingEvidenceUrls: evidenceFiles,
       pendingNotes: notes,
     });
     setIsEditing(false);
@@ -71,7 +75,7 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
   };
 
   const handleAddContact = async () => {
-    if (!newContact.fullName || !newContact.email) return;
+    if (!newContact.fullName || !newContact.email || !newContact.phone) return;
     setAddingContact(true);
     await onAddContact(newContact);
     setAddingContact(false);
@@ -130,9 +134,11 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
               </div>
             </div>
           </div>
-          {requirement.pendingEvidenceUrl && (
+          {(requirement.pendingEvidenceUrls || []).length > 0 && (
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>
-              <i className="fas fa-paperclip"></i> {requirement.pendingEvidenceUrl}
+              {requirement.pendingEvidenceUrls.map((f) => (
+                <div key={f}><i className="fas fa-paperclip"></i> {f}</div>
+              ))}
             </div>
           )}
         </div>
@@ -155,7 +161,7 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
           </div>
           {!canMarkCompliant && (
             <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-              MARK COMPLIANT unlocks once an owner is assigned and evidence is attached in EDIT.
+              MARK COMPLIANT unlocks once an owner is assigned and at least one evidence file is attached in EDIT.
             </p>
           )}
         </div>
@@ -198,16 +204,31 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
             </div>
           )}
 
-          <div className="timeline-item editable" style={{ margin: '14px 0 10px' }}>
-            <span className="timeline-sub">DATE COMPLETED</span>
-            <input type="date" className="timeline-input" value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} />
-          </div>
+          {requirement.assignedAt && (
+            <p style={{ fontSize: 12, opacity: 0.65, margin: '10px 0 0' }}>
+              Assigned on {formatDate(requirement.assignedAt)}. The completion date gets set automatically
+              when evidence is attached, or picked by the assignee if they use their upload link.
+            </p>
+          )}
 
-          <label className="upload-btn">
+          <label className="upload-btn" style={{ marginTop: 14 }}>
             <i className="fas fa-cloud-upload-alt"></i>
-            {evidenceFileName || 'ATTACH EVIDENCE'}
-            <input type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+            ATTACH EVIDENCE (select one or more)
+            <input type="file" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
           </label>
+
+          {evidenceFiles.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              {evidenceFiles.map((f) => (
+                <div key={f} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(0,0,0,0.04)', borderRadius: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 13 }}><i className="fas fa-paperclip"></i> {f}</span>
+                  <button type="button" onClick={() => removeEvidenceFile(f)} style={{ border: 'none', background: 'none', color: '#A23E2A', cursor: 'pointer' }} aria-label={`Remove ${f}`}>
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <input className="assignment-input" placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ marginTop: 10 }} />
 

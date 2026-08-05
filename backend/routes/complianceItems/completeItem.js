@@ -21,16 +21,16 @@ const completeItem = asyncHandler(async (req, res) => {
   if (!item) return res.status(404).json({ error: 'Compliance item not found' });
 
   const hasOwner = Boolean(item.assignedContactId || item.assignedVendorId);
-  const evidenceUrl = req.body.evidenceUrl || item.pendingEvidenceUrl;
+  const evidenceUrls = (req.body.evidenceUrls && req.body.evidenceUrls.length > 0) ? req.body.evidenceUrls : item.pendingEvidenceUrls;
   const completedDateRaw = req.body.completedDate || item.pendingCompletedDate;
 
   if (!hasOwner) {
     console.warn(`[compliance-items] operator ${req.operatorId}: blocked complete on ${item._id} - no owner assigned`);
     return res.status(422).json({ error: 'Assign an owner before this can be marked compliant.' });
   }
-  if (!evidenceUrl) {
+  if (!evidenceUrls || evidenceUrls.length === 0) {
     console.warn(`[compliance-items] operator ${req.operatorId}: blocked complete on ${item._id} - no evidence attached`);
-    return res.status(422).json({ error: 'Attach evidence before this can be marked compliant.' });
+    return res.status(422).json({ error: 'Attach at least one piece of evidence before this can be marked compliant.' });
   }
   if (!completedDateRaw) {
     console.warn(`[compliance-items] operator ${req.operatorId}: blocked complete on ${item._id} - no completion date`);
@@ -46,13 +46,13 @@ const completeItem = asyncHandler(async (req, res) => {
     completedDate: new Date(completedDateRaw),
     completedByContactId: item.assignedContactId?._id || null,
     completedByName,
-    evidenceUrl,
+    evidenceUrls,
     notes: req.body.notes || item.pendingNotes || '',
   });
 
   // clear the draft now that it's finalized
   updated.pendingCompletedDate = null;
-  updated.pendingEvidenceUrl = null;
+  updated.pendingEvidenceUrls = [];
   updated.pendingNotes = '';
   await updated.save();
 

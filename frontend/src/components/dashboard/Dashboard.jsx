@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import './Dashboard.css';
 import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
 import {
   getComplianceItems, completeComplianceItem, updateComplianceItem,
-  listContacts, addContact, getArchive, listVendors, addVendor,
+  listContacts, addContact, getArchive, listVendors, addVendor, runStatusCheck,
 } from '../../api/client';
 
-// 'pending' is the honest default for a never-completed item - it is
-// deliberately NOT the same visual state as 'compliant'. A fresh install
-// should show everything as not-yet-done, not falsely green.
+// 'pending' is the honest default for a never-completed item.
 const mapStatusForDisplay = (backendStatus) => {
   if (backendStatus === 'past_due') return 'past due';
   if (backendStatus === 'due' || backendStatus === 'started') return 'due';
@@ -33,9 +32,10 @@ const mapItemForDisplay = (item) => ({
     : 'Interval not yet set',
   requiresOperatorInput: item.requiresOperatorInput,
   lastCompleted: item.lastCompletedDate,
+  assignedAt: item.assignedAt,
   nextDue: item.nextDueDate,
   pendingCompletedDate: item.pendingCompletedDate,
-  pendingEvidenceUrl: item.pendingEvidenceUrl,
+  pendingEvidenceUrls: item.pendingEvidenceUrls || [],
   pendingNotes: item.pendingNotes,
   assignedContactId: item.assignedContactId?._id || null,
   assignedContactName: item.assignedContactId?.fullName || null,
@@ -83,19 +83,84 @@ const Dial = ({ status, size = 28 }) => {
   );
 };
 
+// A plain month-grid calendar. Days with at least one due item get a small
+// count badge; clicking ANY day navigates to the main ledger (per request -
+// "just a normal calendar... clickable taking you to the main calendar").
+const MonthCalendar = ({ requirements, onDayClick }) => {
+  const [cursor, setCursor] = useState(new Date());
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const startWeekday = firstOfMonth.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const dueCountByDay = useMemo(() => {
+    const counts = {};
+    requirements.forEach((r) => {
+      if (!r.nextDue) return;
+      const d = new Date(r.nextDue);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        counts[d.getDate()] = (counts[d.getDate()] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [requirements, year, month]);
+
+  const cells = [];
+  for (let i = 0; i < startWeekday; i += 1) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d += 1) cells.push(d);
+
+  const today = new Date();
+  const isToday = (d) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  return (
+    <div className="mini-calendar">
+      <div className="mini-calendar-header">
+        <button type="button" onClick={() => setCursor(new Date(year, month - 1, 1))} aria-label="Previous month">‹</button>
+        <span>{firstOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+        <button type="button" onClick={() => setCursor(new Date(year, month + 1, 1))} aria-label="Next month">›</button>
+      </div>
+      <div className="mini-calendar-weekdays">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i}>{d}</span>)}
+      </div>
+      <div className="mini-calendar-grid">
+        {cells.map((d, i) => (
+          <button
+            type="button"
+            key={i}
+            className={`mini-calendar-day ${d ? '' : 'empty'} ${isToday(d) ? 'today' : ''} ${d && dueCountByDay[d] ? 'has-due' : ''}`}
+            disabled={!d}
+            onClick={() => d && onDayClick()}
+          >
+            {d && (
+              <>
+                <span>{d}</span>
+                {dueCountByDay[d] && <span className="mini-calendar-badge">{dueCountByDay[d]}</span>}
+              </>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const ComplianceDashboard = ({ configData }) => {
+  const navigate = useNavigate();
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [openBreakdownCat, setOpenBreakdownCat] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [mainView, setMainView] = useState('ledger'); // 'ledger' | 'archive' | 'escalation' | 'vendors'
   const [archiveEntries, setArchiveEntries] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [newContact, setNewContact] = useState({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
   const [addingContact, setAddingContact] = useState(false);
   const [addContactError, setAddContactError] = useState('');
+  const [expandedContactId, setExpandedContactId] = useState(null);
+  const [testingNotifications, setTestingNotifications] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const [vendorList, setVendorList] = useState(configData?.vendors || []);
   const [newVendor, setNewVendor] = useState({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '' });
@@ -143,6 +208,7 @@ const ComplianceDashboard = ({ configData }) => {
     fetchItems();
     fetchContacts();
     fetchVendors();
+    fetchArchive();
   }, []);
 
   const CATEGORIES = useMemo(() => {
@@ -151,11 +217,6 @@ const ComplianceDashboard = ({ configData }) => {
     return Array.from(seen.keys()).map((key) => ({ key, label: key }));
   }, [requirements]);
 
-  // Two distinct kinds of update from RequirementDetail:
-  //  'edit'     - assignment + draft completion info. No status change.
-  //  'complete' - the gated confirm step. The backend itself enforces that
-  //               an owner + evidence already exist (422 if not) - this
-  //               just surfaces that error clearly if it happens.
   const handleRequirementUpdate = async (id, updates) => {
     try {
       if (updates.kind === 'edit') {
@@ -164,8 +225,7 @@ const ComplianceDashboard = ({ configData }) => {
           if (updates.assigneeType === 'vendor') payload.assignedVendorId = updates.assignedId;
           else payload.assignedContactId = updates.assignedId;
         }
-        if (updates.pendingCompletedDate !== undefined) payload.pendingCompletedDate = updates.pendingCompletedDate;
-        if (updates.pendingEvidenceUrl !== undefined) payload.pendingEvidenceUrl = updates.pendingEvidenceUrl;
+        if (updates.pendingEvidenceUrls !== undefined) payload.pendingEvidenceUrls = updates.pendingEvidenceUrls;
         if (updates.pendingNotes !== undefined) payload.pendingNotes = updates.pendingNotes;
         await updateComplianceItem(id, payload);
         console.log(`[Dashboard] edited item ${id}`, payload);
@@ -179,9 +239,8 @@ const ComplianceDashboard = ({ configData }) => {
       setLoadError(err.message);
       return;
     }
-
     fetchItems();
-    setSelectedRequirement(null);
+    navigate('/dashboard');
   };
 
   const handleAddContact = async (contactData) => {
@@ -227,6 +286,42 @@ const ComplianceDashboard = ({ configData }) => {
     }
   };
 
+  const handleSubmitNewVendor = async (e) => {
+    e.preventDefault();
+    setAddVendorError('');
+    if (!newVendor.companyName) {
+      setAddVendorError('Company name is required.');
+      return;
+    }
+    setAddingVendor(true);
+    try {
+      await addVendor(newVendor);
+      setNewVendor({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '' });
+      fetchVendors();
+    } catch (err) {
+      console.error('[Dashboard] addVendor failed:', err);
+      setAddVendorError(err.message);
+    } finally {
+      setAddingVendor(false);
+    }
+  };
+
+  const handleTestNotifications = async () => {
+    setTestingNotifications(true);
+    setTestResult(null);
+    try {
+      const result = await runStatusCheck();
+      console.log('[Dashboard] manual notification check result:', result);
+      setTestResult(result);
+      fetchItems();
+    } catch (err) {
+      console.error('[Dashboard] runStatusCheck failed:', err);
+      setTestResult({ error: err.message });
+    } finally {
+      setTestingNotifications(false);
+    }
+  };
+
   const categoryStatus = (catKey) => {
     const items = requirements.filter((r) => r.category === catKey);
     if (items.some((r) => r.status === 'past due')) return 'past due';
@@ -252,34 +347,295 @@ const ComplianceDashboard = ({ configData }) => {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const toggleBreakdown = (catKey) => {
-    setOpenBreakdownCat((prev) => (prev === catKey ? null : catKey));
+  const toggleBreakdown = (catKey) => setOpenBreakdownCat((prev) => (prev === catKey ? null : catKey));
+
+  const assignedItemsFor = (contactId) => requirements.filter((r) => r.assignedContactId === contactId);
+
+  // ---- Page components (each is a real route, so browser back/forward works) ----
+
+  const LedgerPage = () => (
+    <>
+      <div className="route-spine-wrapper">
+        <div className="route-spine">
+          {CATEGORIES.map((cat, idx) => (
+            <React.Fragment key={cat.key}>
+              <button className="spine-node" onClick={() => scrollToCategory(cat.key)}>
+                <Dial status={categoryStatus(cat.key)} size={28} />
+                <span className="node-label">{cat.label}</span>
+              </button>
+              {idx < CATEGORIES.length - 1 && <span className="spine-connector"></span>}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      <div className="ledger-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: 32 }}></th>
+              <th>Reference</th>
+              <th>Requirement</th>
+              <th>Due Date</th>
+              <th>Last Completed</th>
+              <th>Assigned To</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CATEGORIES.map((cat) => {
+              const items = requirements.filter((r) => r.category === cat.key);
+              const catStatus = categoryStatus(cat.key);
+              const counts = categoryBreakdown(cat.key);
+              const isOpen = openBreakdownCat === cat.key;
+              return (
+                <React.Fragment key={cat.key}>
+                  <tr className="category-label" id={`cat-${cat.key.replace(/\s/g, '')}`}>
+                    <td colSpan="7" className="category-label-cell">
+                      <span className="category-header">
+                        <Dial status={catStatus} size={24} />
+                        <strong>{cat.label}</strong>
+                        <button type="button" className="breakdown-toggle" onClick={() => toggleBreakdown(cat.key)} aria-expanded={isOpen}>
+                          <i className={`fas fa-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden="true"></i>
+                        </button>
+                      </span>
+                      {isOpen && (
+                        <div className="category-breakdown-dropdown category-breakdown-dropdown--floating">
+                          <div className={`cat-count-row cat-count-row--compliant ${counts.compliant === 0 ? 'is-zero' : ''}`}>
+                            <span className="cat-count-dot"></span><span className="cat-count-name">Compliant</span><span className="cat-count-value">{counts.compliant}</span>
+                          </div>
+                          <div className={`cat-count-row cat-count-row--due ${counts.due === 0 ? 'is-zero' : ''}`}>
+                            <span className="cat-count-dot"></span><span className="cat-count-name">Due</span><span className="cat-count-value">{counts.due}</span>
+                          </div>
+                          <div className={`cat-count-row cat-count-row--pastdue ${counts.pastDue === 0 ? 'is-zero' : ''}`}>
+                            <span className="cat-count-dot"></span><span className="cat-count-name">Past Due</span><span className="cat-count-value">{counts.pastDue}</span>
+                          </div>
+                          <div className={`cat-count-row cat-count-row--unset ${counts.unset === 0 ? 'is-zero' : ''}`}>
+                            <span className="cat-count-dot"></span><span className="cat-count-name">Not Completed</span><span className="cat-count-value">{counts.unset}</span>
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {items.map((req) => (
+                    <tr
+                      key={req.id}
+                      className="clickable-row"
+                      tabIndex={0}
+                      role="button"
+                      onClick={() => navigate(`/dashboard/requirement/${req.id}`)}
+                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/requirement/${req.id}`)}
+                    >
+                      <td className="td-dial"><Dial status={req.status} size={26} /></td>
+                      <td className="td-citation">{req.citation}</td>
+                      <td>
+                        {req.description}
+                        {req.requiresOperatorInput && !req.frequencyValue && (
+                          <span style={{ marginLeft: 8, color: '#C98A1E', fontSize: 11 }}>⚠ needs interval</span>
+                        )}
+                      </td>
+                      <td className="td-due">{formatDate(req.nextDue)}</td>
+                      <td className="td-due">{formatDate(req.lastCompleted)}</td>
+                      <td className="td-assign">{req.assigned}</td>
+                      <td className="td-status">
+                        {req.status === 'pending' ? (
+                          <><span className="status-dot" style={{ background: '#6B7280' }}></span>Not completed</>
+                        ) : req.status ? (
+                          <>
+                            <span className="status-dot" style={{ background: req.status === 'past due' ? '#A23E2A' : req.status === 'due' ? '#C98A1E' : '#3F6B52' }}></span>
+                            {req.status}
+                          </>
+                        ) : (
+                          <span className="status-unset">Not set</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  const RequirementDetailPage = () => {
+    const { id } = useParams();
+    const requirement = requirements.find((r) => r.id === id);
+    if (!requirement) {
+      return <p>Loading requirement… (if this doesn't load, it may not exist - go <button onClick={() => navigate('/dashboard')} style={{ textDecoration: 'underline', border: 'none', background: 'none', cursor: 'pointer' }}>back to the calendar</button>)</p>;
+    }
+    return (
+      <RequirementDetail
+        requirement={requirement}
+        onBack={() => navigate('/dashboard')}
+        onUpdate={handleRequirementUpdate}
+        onAddContact={handleAddContact}
+        vendorList={vendorList}
+        contactList={contacts}
+      />
+    );
   };
 
-  const goToLedger = () => { setMainView('ledger'); setSelectedRequirement(null); };
-  const goToArchive = () => { setMainView('archive'); fetchArchive(); };
-  const goToEscalation = () => { setMainView('escalation'); fetchContacts(); };
-  const goToVendors = () => { setMainView('vendors'); fetchVendors(); };
+  const ArchivePage = () => (
+    <>
+      <h2>Audit Archive</h2>
+      {archiveLoading && <p>Loading archive…</p>}
+      {!archiveLoading && archiveEntries.length === 0 && (
+        <p style={{ opacity: 0.7 }}>Nothing logged yet. Entries appear here the moment anything is marked compliant.</p>
+      )}
+      {!archiveLoading && archiveEntries.length > 0 && (
+        <div className="ledger-scroll" style={{ height: 'auto' }}>
+          <table>
+            <thead>
+              <tr><th>Date Completed</th><th>Regulation</th><th>Category</th><th>Completed By</th><th>Evidence</th></tr>
+            </thead>
+            <tbody>
+              {archiveEntries.map((entry) => (
+                <tr key={entry.id}>
+                  <td>{formatDate(entry.completedDate)}</td>
+                  <td><strong>{entry.regulationTitle}</strong><div style={{ fontSize: 12, opacity: 0.7 }}>{entry.sourceRegulation}</div></td>
+                  <td>{entry.categoryName}</td>
+                  <td>{entry.completedBy}</td>
+                  <td>{(entry.evidenceUrls || []).join(', ') || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
 
-  const handleSubmitNewVendor = async (e) => {
-    e.preventDefault();
-    setAddVendorError('');
-    if (!newVendor.companyName) {
-      setAddVendorError('Company name is required.');
-      return;
-    }
-    setAddingVendor(true);
-    try {
-      await addVendor(newVendor);
-      setNewVendor({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '' });
-      fetchVendors();
-    } catch (err) {
-      console.error('[Dashboard] addVendor failed:', err);
-      setAddVendorError(err.message);
-    } finally {
-      setAddingVendor(false);
-    }
-  };
+  const EscalationPage = () => (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Escalation Ladder</h2>
+        <div style={{ textAlign: 'right' }}>
+          <button className="action-button save" onClick={handleTestNotifications} disabled={testingNotifications}>
+            {testingNotifications ? 'CHECKING…' : 'TEST NOTIFICATIONS NOW'}
+          </button>
+          {testResult && (
+            <p style={{ fontSize: 12, marginTop: 6, opacity: 0.8 }}>
+              {testResult.error
+                ? `⚠ ${testResult.error}`
+                : `Checked ${testResult.checked} item(s), ${testResult.updated} status change(s), ${testResult.notified} notification(s) sent. Check the backend console (or your inbox if SMTP is set up).`}
+            </p>
+          )}
+        </div>
+      </div>
+      <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8 }}>
+        Reminders fire automatically once a day as items enter their due window - use the button above to check right now instead of waiting.
+      </p>
+
+      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 12 }}>
+        <table>
+          <thead>
+            <tr><th>Level</th><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th>Assigned Tasks</th></tr>
+          </thead>
+          <tbody>
+            {contacts.length === 0 ? (
+              <tr><td colSpan="6" style={{ padding: 16, opacity: 0.7 }}>No contacts yet - add one below.</td></tr>
+            ) : contacts.map((c) => {
+              const assigned = assignedItemsFor(c._id);
+              const isOpen = expandedContactId === c._id;
+              return (
+                <React.Fragment key={c._id}>
+                  <tr>
+                    <td>{c.escalationLevel}</td>
+                    <td>{c.fullName}</td>
+                    <td>{c.title}</td>
+                    <td>{c.email}</td>
+                    <td>{c.phone}</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedContactId(isOpen ? null : c._id)}
+                        style={{ border: 'none', background: 'none', cursor: assigned.length ? 'pointer' : 'default', textDecoration: assigned.length ? 'underline' : 'none' }}
+                        disabled={assigned.length === 0}
+                      >
+                        {assigned.length} task{assigned.length === 1 ? '' : 's'}
+                      </button>
+                    </td>
+                  </tr>
+                  {isOpen && assigned.length > 0 && (
+                    <tr>
+                      <td colSpan="6" style={{ background: 'rgba(0,0,0,0.03)', padding: 12 }}>
+                        {assigned.map((r) => (
+                          <div key={r.id} style={{ padding: '4px 0' }}>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/dashboard/requirement/${r.id}`)}
+                              style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', textAlign: 'left' }}
+                            >
+                              {r.description} <span style={{ opacity: 0.6 }}>({r.status || 'not completed'})</span>
+                            </button>
+                          </div>
+                        ))}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <form onSubmit={handleSubmitNewContact} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
+        <div className="card-label" style={{ marginBottom: 10 }}>ADD CONTACT</div>
+        {addContactError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addContactError}</p>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <input placeholder="Full name" value={newContact.fullName} onChange={(e) => setNewContact({ ...newContact, fullName: e.target.value })} />
+          <input placeholder="Title" value={newContact.title} onChange={(e) => setNewContact({ ...newContact, title: e.target.value })} />
+          <input placeholder="Email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
+          <input placeholder="Phone" value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} />
+          <input placeholder="Escalation level (1 = notified first)" type="number" min="1" value={newContact.escalationLevel} onChange={(e) => setNewContact({ ...newContact, escalationLevel: e.target.value })} />
+        </div>
+        <button type="submit" className="action-button save" disabled={addingContact}>
+          {addingContact ? 'ADDING…' : 'ADD CONTACT'}
+        </button>
+      </form>
+    </>
+  );
+
+  const VendorsPage = () => (
+    <>
+      <h2>Vendors</h2>
+      <div className="ledger-scroll" style={{ height: 'auto' }}>
+        <table>
+          <thead>
+            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th></tr>
+          </thead>
+          <tbody>
+            {vendorList.length === 0 ? (
+              <tr><td colSpan="5" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
+            ) : vendorList.map((v) => (
+              <tr key={v._id || v.id}>
+                <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <form onSubmit={handleSubmitNewVendor} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
+        <div className="card-label" style={{ marginBottom: 10 }}>ADD VENDOR</div>
+        {addVendorError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addVendorError}</p>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <input placeholder="Company name" value={newVendor.companyName} onChange={(e) => setNewVendor({ ...newVendor, companyName: e.target.value })} />
+          <input placeholder="Contact person" value={newVendor.personnelName} onChange={(e) => setNewVendor({ ...newVendor, personnelName: e.target.value })} />
+          <input placeholder="Email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} />
+          <input placeholder="Phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} />
+          <input placeholder="Service scope" value={newVendor.serviceScope} onChange={(e) => setNewVendor({ ...newVendor, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
+        </div>
+        <button type="submit" className="action-button save" disabled={addingVendor}>
+          {addingVendor ? 'ADDING…' : 'ADD VENDOR'}
+        </button>
+      </form>
+    </>
+  );
 
   return (
     <div className="app-container">
@@ -294,31 +650,23 @@ const ComplianceDashboard = ({ configData }) => {
         </div>
 
         <nav className="sidebar-nav">
-          <a href="#calendar" className={mainView === 'ledger' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToLedger(); }}>
-            <i className="fas fa-calendar-alt" aria-hidden="true"></i>
-            <span>CALENDAR</span>
+          <a href="/dashboard" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }}>
+            <i className="fas fa-calendar-alt" aria-hidden="true"></i><span>CALENDAR</span>
           </a>
-          <a href="#escalation" className={mainView === 'escalation' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToEscalation(); }}>
-            <i className="fas fa-arrow-up" aria-hidden="true"></i>
-            <span>ESCALATION LADDER</span>
+          <a href="/dashboard/escalation" onClick={(e) => { e.preventDefault(); navigate('/dashboard/escalation'); }}>
+            <i className="fas fa-arrow-up" aria-hidden="true"></i><span>ESCALATION LADDER</span>
           </a>
-          <a href="#vendors" className={mainView === 'vendors' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToVendors(); }}>
-            <i className="fas fa-store" aria-hidden="true"></i>
-            <span>VENDORS</span>
+          <a href="/dashboard/vendors" onClick={(e) => { e.preventDefault(); navigate('/dashboard/vendors'); }}>
+            <i className="fas fa-store" aria-hidden="true"></i><span>VENDORS</span>
           </a>
-          <a href="#">
-            <i className="fas fa-chart-bar" aria-hidden="true"></i>
-            <span>REPORTS</span>
-          </a>
-          <a href="#archive" className={mainView === 'archive' ? 'active' : ''} onClick={(e) => { e.preventDefault(); goToArchive(); }}>
-            <i className="fas fa-archive" aria-hidden="true"></i>
-            <span>AUDIT ARCHIVE</span>
-          </a>
-          <a href="#">
-            <i className="fas fa-cog" aria-hidden="true"></i>
-            <span>SYSTEM SETTINGS</span>
+          <a href="/dashboard/archive" onClick={(e) => { e.preventDefault(); navigate('/dashboard/archive'); }}>
+            <i className="fas fa-archive" aria-hidden="true"></i><span>AUDIT ARCHIVE</span>
           </a>
         </nav>
+
+        {/* The physical calendar - a real month grid. Days with due items
+            show a count badge; clicking any day goes to the main ledger. */}
+        <MonthCalendar requirements={requirements} onDayClick={() => navigate('/dashboard')} />
 
         <div className="user-badge">
           <strong>Jacob Kiage</strong>
@@ -329,237 +677,14 @@ const ComplianceDashboard = ({ configData }) => {
         {loading && <p>Loading your compliance calendar…</p>}
         {loadError && <p style={{ color: '#c0392b' }}>⚠ {loadError}</p>}
 
-        {!loading && !loadError && mainView === 'escalation' && (
-          <>
-            <h2>Escalation Ladder</h2>
-            <div className="ledger-scroll" style={{ height: 'auto' }}>
-              <table>
-                <thead>
-                  <tr><th>Level</th><th>Name</th><th>Title</th><th>Email</th><th>Phone</th></tr>
-                </thead>
-                <tbody>
-                  {contacts.length === 0 ? (
-                    <tr><td colSpan="5" style={{ padding: 16, opacity: 0.7 }}>No contacts yet - add one below.</td></tr>
-                  ) : contacts.map((c) => (
-                    <tr key={c._id}>
-                      <td>{c.escalationLevel}</td>
-                      <td>{c.fullName}</td>
-                      <td>{c.title}</td>
-                      <td>{c.email}</td>
-                      <td>{c.phone}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <form onSubmit={handleSubmitNewContact} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
-              <div className="card-label" style={{ marginBottom: 10 }}>ADD CONTACT</div>
-              {addContactError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addContactError}</p>}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                <input placeholder="Full name" value={newContact.fullName} onChange={(e) => setNewContact({ ...newContact, fullName: e.target.value })} />
-                <input placeholder="Title" value={newContact.title} onChange={(e) => setNewContact({ ...newContact, title: e.target.value })} />
-                <input placeholder="Email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
-                <input placeholder="Phone" value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} />
-                <input placeholder="Escalation level (1 = notified first)" type="number" min="1" value={newContact.escalationLevel} onChange={(e) => setNewContact({ ...newContact, escalationLevel: e.target.value })} />
-              </div>
-              <button type="submit" className="action-button save" disabled={addingContact}>
-                {addingContact ? 'ADDING…' : 'ADD CONTACT'}
-              </button>
-            </form>
-          </>
-        )}
-
-        {!loading && !loadError && mainView === 'vendors' && (
-          <>
-            <h2>Vendors</h2>
-            <div className="ledger-scroll" style={{ height: 'auto' }}>
-              <table>
-                <thead>
-                  <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th></tr>
-                </thead>
-                <tbody>
-                  {vendorList.length === 0 ? (
-                    <tr><td colSpan="5" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
-                  ) : vendorList.map((v) => (
-                    <tr key={v._id || v.id}>
-                      <td>{v.companyName}</td>
-                      <td>{v.personnelName}</td>
-                      <td>{v.email}</td>
-                      <td>{v.phone}</td>
-                      <td>{v.serviceScope}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <form onSubmit={handleSubmitNewVendor} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
-              <div className="card-label" style={{ marginBottom: 10 }}>ADD VENDOR</div>
-              {addVendorError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addVendorError}</p>}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                <input placeholder="Company name" value={newVendor.companyName} onChange={(e) => setNewVendor({ ...newVendor, companyName: e.target.value })} />
-                <input placeholder="Contact person" value={newVendor.personnelName} onChange={(e) => setNewVendor({ ...newVendor, personnelName: e.target.value })} />
-                <input placeholder="Email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} />
-                <input placeholder="Phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} />
-                <input placeholder="Service scope (e.g. Cathodic Protection Testing)" value={newVendor.serviceScope} onChange={(e) => setNewVendor({ ...newVendor, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
-              </div>
-              <button type="submit" className="action-button save" disabled={addingVendor}>
-                {addingVendor ? 'ADDING…' : 'ADD VENDOR'}
-              </button>
-            </form>
-          </>
-        )}
-
-        {!loading && !loadError && mainView === 'archive' && (
-          <>
-            <h2>Audit Archive</h2>
-            {archiveLoading && <p>Loading archive…</p>}
-            {!archiveLoading && archiveEntries.length === 0 && (
-              <p style={{ opacity: 0.7 }}>Nothing logged yet. Entries appear here the moment anything is marked compliant.</p>
-            )}
-            {!archiveLoading && archiveEntries.length > 0 && (
-              <div className="ledger-scroll" style={{ height: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr><th>Date Completed</th><th>Regulation</th><th>Category</th><th>Completed By</th><th>Evidence</th></tr>
-                  </thead>
-                  <tbody>
-                    {archiveEntries.map((entry) => (
-                      <tr key={entry.id}>
-                        <td>{formatDate(entry.completedDate)}</td>
-                        <td>
-                          <strong>{entry.regulationTitle}</strong>
-                          <div style={{ fontSize: 12, opacity: 0.7 }}>{entry.sourceRegulation}</div>
-                        </td>
-                        <td>{entry.categoryName}</td>
-                        <td>{entry.completedBy}</td>
-                        <td>{entry.evidenceUrl || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-
-        {!loading && !loadError && mainView === 'ledger' && selectedRequirement && (
-          <RequirementDetail
-            requirement={selectedRequirement}
-            onBack={() => setSelectedRequirement(null)}
-            onUpdate={handleRequirementUpdate}
-            onAddContact={handleAddContact}
-            vendorList={vendorList}
-            contactList={contacts}
-          />
-        )}
-
-        {!loading && !loadError && mainView === 'ledger' && !selectedRequirement && (
-          <>
-            <div className="route-spine-wrapper">
-              <div className="route-spine">
-                {CATEGORIES.map((cat, idx) => (
-                  <React.Fragment key={cat.key}>
-                    <button className="spine-node" onClick={() => scrollToCategory(cat.key)}>
-                      <Dial status={categoryStatus(cat.key)} size={28} />
-                      <span className="node-label">{cat.label}</span>
-                    </button>
-                    {idx < CATEGORIES.length - 1 && <span className="spine-connector"></span>}
-                  </React.Fragment>
-                ))}
-              </div>
-            </div>
-
-            <div className="ledger-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 32 }}></th>
-                    <th>Reference</th>
-                    <th>Requirement</th>
-                    <th>Due Date</th>
-                    <th>Last Completed</th>
-                    <th>Assigned To</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {CATEGORIES.map((cat) => {
-                    const items = requirements.filter((r) => r.category === cat.key);
-                    const catStatus = categoryStatus(cat.key);
-                    const counts = categoryBreakdown(cat.key);
-                    const isOpen = openBreakdownCat === cat.key;
-                    return (
-                      <React.Fragment key={cat.key}>
-                        <tr className="category-label" id={`cat-${cat.key.replace(/\s/g, '')}`}>
-                          <td colSpan="7" className="category-label-cell">
-                            <span className="category-header">
-                              <Dial status={catStatus} size={24} />
-                              <strong>{cat.label}</strong>
-                              <button type="button" className="breakdown-toggle" onClick={() => toggleBreakdown(cat.key)} aria-expanded={isOpen}>
-                                <i className={`fas fa-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden="true"></i>
-                              </button>
-                            </span>
-                            {isOpen && (
-                              <div className="category-breakdown-dropdown category-breakdown-dropdown--floating">
-                                <div className={`cat-count-row cat-count-row--compliant ${counts.compliant === 0 ? 'is-zero' : ''}`}>
-                                  <span className="cat-count-dot"></span><span className="cat-count-name">Compliant</span><span className="cat-count-value">{counts.compliant}</span>
-                                </div>
-                                <div className={`cat-count-row cat-count-row--due ${counts.due === 0 ? 'is-zero' : ''}`}>
-                                  <span className="cat-count-dot"></span><span className="cat-count-name">Due</span><span className="cat-count-value">{counts.due}</span>
-                                </div>
-                                <div className={`cat-count-row cat-count-row--pastdue ${counts.pastDue === 0 ? 'is-zero' : ''}`}>
-                                  <span className="cat-count-dot"></span><span className="cat-count-name">Past Due</span><span className="cat-count-value">{counts.pastDue}</span>
-                                </div>
-                                <div className={`cat-count-row cat-count-row--unset ${counts.unset === 0 ? 'is-zero' : ''}`}>
-                                  <span className="cat-count-dot"></span><span className="cat-count-name">Not Completed</span><span className="cat-count-value">{counts.unset}</span>
-                                </div>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                        {items.map((req) => (
-                          <tr
-                            key={req.id}
-                            className="clickable-row"
-                            tabIndex={0}
-                            role="button"
-                            onClick={() => setSelectedRequirement(req)}
-                            onKeyDown={(e) => e.key === 'Enter' && setSelectedRequirement(req)}
-                          >
-                            <td className="td-dial"><Dial status={req.status} size={26} /></td>
-                            <td className="td-citation">{req.citation}</td>
-                            <td>
-                              {req.description}
-                              {req.requiresOperatorInput && !req.frequencyValue && (
-                                <span style={{ marginLeft: 8, color: '#C98A1E', fontSize: 11 }}>⚠ needs interval</span>
-                              )}
-                            </td>
-                            <td className="td-due">{formatDate(req.nextDue)}</td>
-                            <td className="td-due">{formatDate(req.pendingCompletedDate || req.lastCompleted)}</td>
-                            <td className="td-assign">{req.assigned}</td>
-                            <td className="td-status">
-                              {req.status === 'pending' ? (
-                                <><span className="status-dot" style={{ background: '#6B7280' }}></span>Not completed</>
-                              ) : req.status ? (
-                                <>
-                                  <span className="status-dot" style={{ background: req.status === 'past due' ? '#A23E2A' : req.status === 'due' ? '#C98A1E' : '#3F6B52' }}></span>
-                                  {req.status}
-                                </>
-                              ) : (
-                                <span className="status-unset">Not set</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
+        {!loading && !loadError && (
+          <Routes>
+            <Route path="/dashboard" element={<LedgerPage />} />
+            <Route path="/dashboard/archive" element={<ArchivePage />} />
+            <Route path="/dashboard/escalation" element={<EscalationPage />} />
+            <Route path="/dashboard/vendors" element={<VendorsPage />} />
+            <Route path="/dashboard/requirement/:id" element={<RequirementDetailPage />} />
+          </Routes>
         )}
       </main>
     </div>

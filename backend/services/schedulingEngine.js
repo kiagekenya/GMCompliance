@@ -16,6 +16,7 @@
 const ComplianceItem = require('../models/ComplianceItem');
 const CompletionLog = require('../models/CompletionLog');
 const { addFrequencyToDate, computeActionWindowMonths, computeStatus } = require('../utils/dateMath');
+const { notifyStatusTransition } = require('./notificationService');
 
 function computeInitialSchedule(anchorDate, frequencyValue, frequencyUnit, everCompleted = false) {
   const nextDueDate = addFrequencyToDate(anchorDate, frequencyValue, frequencyUnit);
@@ -24,33 +25,53 @@ function computeInitialSchedule(anchorDate, frequencyValue, frequencyUnit, everC
   return { nextDueDate, actionWindowMonths, status };
 }
 
-async function recalculateAllStatuses() {
-  const items = await ComplianceItem.find({
+// Emails only fire on a TRANSITION into 'due' or 'past_due' (checked by
+// comparing against the status already stored before this run) - not every
+// single day an item remains in that state, so people aren't spammed daily
+// for the same outstanding item.
+async function recalculateAllStatuses(operatorId = null) {
+  const filter = {
     status: { $nin: ['started', 'done'] },
     nextDueDate: { $ne: null },
-  });
+  };
+  if (operatorId) filter.operatorId = operatorId;
+
+  const items = await ComplianceItem.find(filter)
+    .populate('requirementId', 'title sourceRegulation')
+    .populate('assignedContactId', 'fullName email')
+    .populate('assignedVendorId', 'companyName personnelName email');
 
   let updated = 0;
+  let notified = 0;
   for (const item of items) {
     const everCompleted = Boolean(item.lastCompletedDate);
+    const previousStatus = item.status;
     const newStatus = computeStatus(item.nextDueDate, item.actionWindowMonths, everCompleted);
-    if (newStatus !== item.status) {
+
+    if (newStatus !== previousStatus) {
       item.status = newStatus;
       await item.save();
       updated += 1;
+
+      const isNewlyDue = newStatus === 'due' && previousStatus !== 'due';
+      const isNewlyPastDue = newStatus === 'past_due' && previousStatus !== 'past_due';
+      if ((isNewlyDue || isNewlyPastDue) && item.requirementId) {
+        await notifyStatusTransition(item, item.requirementId, newStatus);
+        notified += 1;
+      }
     }
   }
-  return { checked: items.length, updated };
+  return { checked: items.length, updated, notified };
 }
 
-async function recordCompletion(complianceItem, { completedDate, completedByContactId, completedByName, evidenceUrl, notes }) {
+async function recordCompletion(complianceItem, { completedDate, completedByContactId, completedByName, evidenceUrls, notes }) {
   await CompletionLog.create({
     complianceItemId: complianceItem._id,
     operatorId: complianceItem.operatorId,
     completedDate,
     completedByContactId: completedByContactId || null,
     completedByName: completedByName || '',
-    evidenceUrl: evidenceUrl || null,
+    evidenceUrls: evidenceUrls || [],
     notes: notes || '',
   });
 
@@ -59,7 +80,7 @@ async function recordCompletion(complianceItem, { completedDate, completedByCont
 
   complianceItem.lastCompletedDate = completedDate;
   complianceItem.anchorDate = completedDate;
-  complianceItem.completedEvidenceUrl = evidenceUrl || null;
+  complianceItem.completedEvidenceUrls = evidenceUrls || [];
 
   // everCompleted = true here, always - this function only ever runs for a
   // real completion, so a far-off next date correctly shows 'compliant'.

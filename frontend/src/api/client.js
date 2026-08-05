@@ -79,6 +79,7 @@ export const getComplianceItems = () => request('/compliance-items');
 export const getArchive = () => request('/compliance-items/archive');
 export const updateComplianceItem = (id, payload) => request(`/compliance-items/${id}`, { method: 'PATCH', body: payload });
 export const completeComplianceItem = (id, payload) => request(`/compliance-items/${id}/complete`, { method: 'POST', body: payload });
+export const runStatusCheck = () => request('/compliance-items/run-status-check', { method: 'POST' });
 
 // --- Contacts ---
 export const listContacts = () => request('/contacts');

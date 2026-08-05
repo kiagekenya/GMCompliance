@@ -23,7 +23,8 @@ const getUploadInfo = asyncHandler(async (req, res) => {
     sourceRegulation: item.requirementId?.sourceRegulation,
     categoryName: item.requirementId?.categoryName,
     nextDueDate: item.nextDueDate,
-    alreadySubmitted: Boolean(item.pendingEvidenceUrl),
+    alreadySubmitted: (item.pendingEvidenceUrls || []).length > 0,
+    existingFiles: item.pendingEvidenceUrls || [],
   });
 });
 

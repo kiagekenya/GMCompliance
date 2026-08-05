@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import './SystemInit.css';
-import MasterLedgerInit from '../masterledgerinit/MasterLedgerInit';
 import { saveProfile, updateCompany, addContact, addVendor } from '../../api/client';
 
 const STEPS = [
@@ -21,7 +20,6 @@ const DEFAULT_VENDOR = {
 
 const SystemInit = ({ onComplete }) => {
   const [activeStep, setActiveStep] = useState(1);
-  const [showMasterLedger, setShowMasterLedger] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
   const [showClassInfo, setShowClassInfo] = useState(false);
 
@@ -220,7 +218,7 @@ const SystemInit = ({ onComplete }) => {
         await addVendor({ companyName: v.companyName, personnelName: v.personnelName, email: v.email, phone: v.phone, serviceScope: v.serviceScope });
       }
 
-      setShowMasterLedger(true);
+      if (onComplete) onComplete(buildFinalData());
     } catch (err) {
       console.error('[SystemInit] handleFinalizeSetup failed:', err);
       setSubmitError(err.message);
@@ -228,19 +226,6 @@ const SystemInit = ({ onComplete }) => {
       setIsSubmitting(false);
     }
   };
-
-  const handleInitializeDashboard = () => {
-    if (onComplete) onComplete(buildFinalData());
-  };
-
-  if (showMasterLedger) {
-    return (
-      <MasterLedgerInit
-        configData={buildFinalData()}
-        onInitializeDashboard={handleInitializeDashboard}
-      />
-    );
-  }
 
   return (
     <div className="init-page">
