@@ -395,7 +395,7 @@
     "suggestedDefaultFrequencyUnit": null,
     "frequencyVariants": [
       {
-        "resolvedByProfileField": "class_location",
+        "resolvedByProfileField": "classLocation",
         "variantKey": "class_1_2",
         "variantLabel": "Class 1 or 2 location",
         "pipelineTypeOverride": null,
@@ -403,7 +403,7 @@
         "frequencyUnit": "months"
       },
       {
-        "resolvedByProfileField": "class_location",
+        "resolvedByProfileField": "classLocation",
         "variantKey": "class_3",
         "variantLabel": "Class 3 location",
         "pipelineTypeOverride": null,
@@ -411,7 +411,7 @@
         "frequencyUnit": "months"
       },
       {
-        "resolvedByProfileField": "class_location",
+        "resolvedByProfileField": "classLocation",
         "variantKey": "class_4",
         "variantLabel": "Class 4 location",
         "pipelineTypeOverride": null,
@@ -456,7 +456,7 @@
     "suggestedDefaultFrequencyUnit": null,
     "frequencyVariants": [
       {
-        "resolvedByProfileField": "class_location",
+        "resolvedByProfileField": "classLocation",
         "variantKey": "class_3",
         "variantLabel": "Class 3 location",
         "pipelineTypeOverride": null,
@@ -464,7 +464,7 @@
         "frequencyUnit": "months"
       },
       {
-        "resolvedByProfileField": "class_location",
+        "resolvedByProfileField": "classLocation",
         "variantKey": "class_4",
         "variantLabel": "Class 4 location",
         "pipelineTypeOverride": null,
@@ -725,7 +725,7 @@
     "suggestedDefaultFrequencyUnit": null,
     "frequencyVariants": [
       {
-        "resolvedByProfileField": "welder_requal_path",
+        "resolvedByProfileField": "welderRequalPath",
         "variantKey": "destructive_test_path",
         "variantLabel": "Destructive/non-destructive re-test path",
         "pipelineTypeOverride": null,
@@ -733,7 +733,7 @@
         "frequencyUnit": "months"
       },
       {
-        "resolvedByProfileField": "welder_requal_path",
+        "resolvedByProfileField": "welderRequalPath",
         "variantKey": "annual_path",
         "variantLabel": "Annual re-qualification path",
         "pipelineTypeOverride": null,

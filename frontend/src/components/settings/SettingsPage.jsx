@@ -12,7 +12,10 @@
 // separate, bigger feature. This only updates the stored profile answers.
 
 import React, { useEffect, useState } from 'react';
-import { getProfile, saveProfile, updateContact, deleteContact, updateVendor, deleteVendor } from '../../api/client';
+import {
+  getProfile, saveProfile, updateContact, deleteContact, updateVendor, deleteVendor,
+  getSuggestedRequirements, confirmComplianceItems,
+} from '../../api/client';
 
 const PROFILE_TOGGLES = [
   ['hasRegulatingStations', 'Pressure limiting / regulating stations?'],
@@ -33,13 +36,14 @@ const PROFILE_TOGGLES = [
   ['hasWeldedPiping', 'Requires on-site production welding?'],
 ];
 
-const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVendorsChanged }) => {
+const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVendorsChanged, onItemsChanged }) => {
   const [profile, setProfile] = useState(null);
   const [profileForm, setProfileForm] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   const [editingContactId, setEditingContactId] = useState(null);
   const [contactDraft, setContactDraft] = useState({});
@@ -64,6 +68,7 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     setProfileError('');
+    setSyncMessage('');
     try {
       const saved = await saveProfile({
         ...profileForm,
@@ -72,6 +77,31 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
       setProfile(saved);
       setProfileForm(saved);
       setEditingProfile(false);
+
+      // A profile edit can newly match requirements that didn't apply
+      // before (e.g. checking "has cathodic protection" unlocks the CP
+      // testing items). Re-run the same suggest -> confirm flow the
+      // original setup wizard used - confirmComplianceItems is idempotent
+      // (upserts on operatorId+requirementId+variant), so items already on
+      // the calendar are left untouched; only genuinely new matches get
+      // added.
+      try {
+        const { suggestedItems } = await getSuggestedRequirements();
+        const items = (suggestedItems || []).map((i) => ({
+          requirementId: i.requirementId,
+          frequencyVariantId: i.frequencyVariantId || undefined,
+        }));
+        const result = await confirmComplianceItems(items);
+        setSyncMessage(
+          result.createdCount > 0
+            ? `Profile saved - ${result.createdCount} new requirement(s) added to your calendar.`
+            : 'Profile saved - no new requirements matched your updated answers.'
+        );
+        if (onItemsChanged) onItemsChanged();
+      } catch (syncErr) {
+        console.error('[SettingsPage] resync after profile save failed:', syncErr);
+        setSyncMessage(`Profile saved, but syncing your calendar failed: ${syncErr.message}`);
+      }
     } catch (err) {
       console.error('[SettingsPage] saveProfile failed:', err);
       setProfileError(err.message);
@@ -164,6 +194,7 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
 
         {profileLoading && <p>Loading profile…</p>}
         {profileError && <p style={{ color: '#c0392b', fontSize: 13 }}>⚠ {profileError}</p>}
+        {syncMessage && <p style={{ color: '#3F6B52', fontSize: 13 }}>✓ {syncMessage}</p>}
 
         {!profileLoading && profile && !editingProfile && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, fontSize: 13 }}>

@@ -746,7 +746,7 @@ const ComplianceDashboard = ({ configData }) => {
             <Route path="/dashboard/archive" element={<ArchivePage />} />
             <Route path="/dashboard/escalation" element={<EscalationPage />} />
             <Route path="/dashboard/vendors" element={<VendorsPage />} />
-            <Route path="/dashboard/settings" element={<SettingsPage contacts={contacts} vendorList={vendorList} onContactsChanged={fetchContacts} onVendorsChanged={fetchVendors} />} />
+            <Route path="/dashboard/settings" element={<SettingsPage contacts={contacts} vendorList={vendorList} onContactsChanged={fetchContacts} onVendorsChanged={fetchVendors} onItemsChanged={fetchItems} />} />
             <Route path="/dashboard/requirement/:id" element={<RequirementDetailPage />} />
           </Routes>
         )}
