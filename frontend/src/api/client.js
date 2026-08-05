@@ -79,12 +79,17 @@ export const getComplianceItems = () => request('/compliance-items');
 export const getArchive = () => request('/compliance-items/archive');
 export const updateComplianceItem = (id, payload) => request(`/compliance-items/${id}`, { method: 'PATCH', body: payload });
 export const completeComplianceItem = (id, payload) => request(`/compliance-items/${id}/complete`, { method: 'POST', body: payload });
+export const setItemFrequency = (id, payload) => request(`/compliance-items/${id}/set-frequency`, { method: 'POST', body: payload });
 export const runStatusCheck = () => request('/compliance-items/run-status-check', { method: 'POST' });
 
 // --- Contacts ---
 export const listContacts = () => request('/contacts');
 export const addContact = (payload) => request('/contacts', { method: 'POST', body: payload });
+export const updateContact = (id, payload) => request(`/contacts/${id}`, { method: 'PATCH', body: payload });
+export const deleteContact = (id) => request(`/contacts/${id}`, { method: 'DELETE' });
 
 // --- Vendors ---
 export const listVendors = () => request('/vendors');
 export const addVendor = (payload) => request('/vendors', { method: 'POST', body: payload });
+export const updateVendor = (id, payload) => request(`/vendors/${id}`, { method: 'PATCH', body: payload });
+export const deleteVendor = (id) => request(`/vendors/${id}`, { method: 'DELETE' });

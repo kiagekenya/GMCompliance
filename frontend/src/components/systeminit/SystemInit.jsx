@@ -6,7 +6,7 @@ const STEPS = [
   { key: 1, label: 'Pipeline Asset Profile', hint: 'Pipeline parameters' },
   { key: 2, label: 'Contacts', hint: 'Ownership & escalation' },
   { key: 3, label: 'Vendor Configuration', hint: 'Third party service providers' },
-  { key: 4, label: 'Compliance', hint: 'Reporting frameworks' },
+  { key: 4, label: 'Confirm', hint: 'Final review' },
 ];
 
 const DEFAULT_VENDOR = {
@@ -30,8 +30,6 @@ const SystemInit = ({ onComplete }) => {
     material: 'Steel',
     type: 'Transmission',
     notes: '',
-    phmsa: true,
-    trrc: true,
 
     // Smart Onboarding Toggles - field names match the backend PipelineProfile
     // model exactly, so saveProfile() below can send this object almost as-is.
@@ -87,7 +85,12 @@ const SystemInit = ({ onComplete }) => {
   };
 
   /* Contact Management */
-  const addContact = () => {
+  // NOTE: named addContactRow (not addContact) so it doesn't shadow the real
+  // addContact import from api/client - a prior bug where this was named
+  // addContact meant handleFinalizeSetup's "await addContact(...)" calls
+  // silently resolved to this local row-adder instead of the backend POST,
+  // so no contact was ever actually persisted.
+  const addContactRow = () => {
     setContacts([
       ...contacts,
       { id: Date.now(), name: '', role: '', email: '', phone: '' },
@@ -105,7 +108,9 @@ const SystemInit = ({ onComplete }) => {
   };
 
   /* Vendor Management */
-  const addVendor = () => {
+  // Same rename as addContactRow above - avoids shadowing the real addVendor
+  // import from api/client.
+  const addVendorRow = () => {
     setVendors([
       ...vendors,
       {
@@ -276,7 +281,7 @@ const SystemInit = ({ onComplete }) => {
                 {activeStep === 1 && 'Configure your primary pipeline parameters.'}
                 {activeStep === 2 && 'Define the contact hierarchy for overdue requirement alerts.'}
                 {activeStep === 3 && 'Register third party vendor companies and personnel.'}
-                {activeStep === 4 && 'Confirm which reporting frameworks apply.'}
+                {activeStep === 4 && 'Review and add any final notes before initializing.'}
               </p>
             </div>
 
@@ -533,7 +538,7 @@ const SystemInit = ({ onComplete }) => {
                     ))}
                   </div>
 
-                  <button className="add-contact-btn" onClick={addContact}>
+                  <button className="add-contact-btn" onClick={addContactRow}>
                     + ADD CONTACT
                   </button>
                 </>
@@ -618,53 +623,19 @@ const SystemInit = ({ onComplete }) => {
                     ))}
                   </div>
 
-                  <button className="add-contact-btn" onClick={addVendor}>
+                  <button className="add-contact-btn" onClick={addVendorRow}>
                     + ADD VENDOR
                   </button>
                 </>
               )}
 
-              {/* STEP 4: Compliance */}
+              {/* STEP 4: Confirm - pipeline is always matched against both
+                  PHMSA (49 CFR) and Texas TRRC (16 TAC); there's no toggle
+                  for this since the applicability engine already scopes
+                  each requirement to what actually applies via its own
+                  smart filter expression. */}
               {activeStep === 4 && (
                 <>
-                  <div className="init-checkbox-group">
-                    <label className="init-checkbox-row">
-                      <input
-                        type="checkbox"
-                        name="phmsa"
-                        checked={formData.phmsa}
-                        onChange={handleInputChange}
-                      />
-                      <span className="init-checkbox-box"></span>
-                      <span className="init-checkbox-copy">
-                        <span className="init-checkbox-title">
-                          PHMSA (49 CFR)
-                        </span>
-                        <span className="init-checkbox-desc">
-                          Federal pipeline safety framework
-                        </span>
-                      </span>
-                    </label>
-
-                    <label className="init-checkbox-row">
-                      <input
-                        type="checkbox"
-                        name="trrc"
-                        checked={formData.trrc}
-                        onChange={handleInputChange}
-                      />
-                      <span className="init-checkbox-box"></span>
-                      <span className="init-checkbox-copy">
-                        <span className="init-checkbox-title">
-                          Texas TRRC (16 TAC)
-                        </span>
-                        <span className="init-checkbox-desc">
-                          State railroad commission rules
-                        </span>
-                      </span>
-                    </label>
-                  </div>
-
                   <div className="init-form-group">
                     <label className="init-label">Notes</label>
                     <textarea

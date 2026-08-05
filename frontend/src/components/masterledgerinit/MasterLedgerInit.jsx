@@ -16,8 +16,6 @@ import { getSuggestedRequirements, confirmComplianceItems, notifySetupComplete }
 
 const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
   const {
-    phmsa = true,
-    trrc = true,
     material = 'Steel',
     type = 'Transmission',
     operatorName = 'Yunoya LTD',
@@ -26,7 +24,6 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [suggested, setSuggested] = useState([]);
-  const [operatorInputs, setOperatorInputs] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   const fetchSuggestions = () => {
@@ -66,16 +63,10 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const getRegulationText = () => {
-    let regs = [];
-    if (phmsa) regs.push('49 CFR Part 192');
-    if (trrc) regs.push('TRRC (16 TAC)');
-    return regs.length > 0 ? regs.join(' and ') : 'applicable regulations';
-  };
-
-  const handleOperatorInputChange = (requirementId, value) => {
-    setOperatorInputs((prev) => ({ ...prev, [requirementId]: value }));
-  };
+  // Every pipeline is matched against both frameworks - the applicability
+  // engine scopes individual requirements via their own smart filter
+  // expression, so there's no operator-level PHMSA/TRRC toggle.
+  const getRegulationText = () => '49 CFR Part 192 and TRRC (16 TAC)';
 
   const handleInitialize = async () => {
     setError('');
@@ -85,26 +76,18 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
       return;
     }
 
-    const missing = suggested.filter(
-      (item) => item.requiresOperatorInput && !operatorInputs[item.requirementId]
-    );
-    if (missing.length > 0) {
-      const msg = `Set an interval for: ${missing.map((m) => m.title).join(', ')}`;
-      console.warn('[MasterLedgerInit] blocked submit -', msg);
-      setError(msg);
-      return;
-    }
-
     setSubmitting(true);
 
     // NOTE: no anchorDate here on purpose. Every item is created as
     // 'pending' (never completed) - the operator marks each one complete
     // for real, from the dashboard, as they actually verify/perform it.
+    // Requirements with no fixed regulatory interval (requiresOperatorInput)
+    // go live flagged as "awaiting_input" instead of being blocked here -
+    // the operator sets their own interval later, from that requirement's
+    // own page (see RequirementDetail.jsx).
     const items = suggested.map((item) => ({
       requirementId: item.requirementId,
       frequencyVariantId: item.frequencyVariantId || undefined,
-      operatorDefinedFrequencyValue: item.requiresOperatorInput ? Number(operatorInputs[item.requirementId]) : undefined,
-      operatorDefinedFrequencyUnit: item.requiresOperatorInput ? 'months' : undefined,
     }));
 
     console.log(`[MasterLedgerInit] submitting ${items.length} items to confirm`, items);
@@ -159,20 +142,10 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
 
               {suggested.filter((i) => i.requiresOperatorInput).length > 0 && (
                 <div className="operator-defined-list" style={{ textAlign: 'left', margin: '16px 0' }}>
-                  <p><strong>These requirements have no fixed regulatory interval - set your own:</strong></p>
-                  {suggested.filter((i) => i.requiresOperatorInput).map((item) => (
-                    <div key={item.requirementId} className="init-form-group">
-                      <label className="init-label">{item.title} (months)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        className="init-input"
-                        placeholder={item.suggestedDefaultFrequencyValue || 'e.g. 12'}
-                        value={operatorInputs[item.requirementId] || ''}
-                        onChange={(e) => handleOperatorInputChange(item.requirementId, e.target.value)}
-                      />
-                    </div>
-                  ))}
+                  <p>
+                    <strong>{suggested.filter((i) => i.requiresOperatorInput).length} requirement(s) have no fixed regulatory interval:</strong>{' '}
+                    they'll go onto your calendar flagged "Needs frequency" - open each one from the dashboard to set your own review interval.
+                  </p>
                 </div>
               )}
 

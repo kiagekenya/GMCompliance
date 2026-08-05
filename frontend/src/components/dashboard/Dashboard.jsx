@@ -3,8 +3,9 @@ import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import './Dashboard.css';
 import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
+import SettingsPage from '../settings/SettingsPage';
 import {
-  getComplianceItems, completeComplianceItem, updateComplianceItem,
+  getComplianceItems, completeComplianceItem, updateComplianceItem, setItemFrequency,
   listContacts, addContact, getArchive, listVendors, addVendor, runStatusCheck,
 } from '../../api/client';
 
@@ -14,6 +15,7 @@ const mapStatusForDisplay = (backendStatus) => {
   if (backendStatus === 'due' || backendStatus === 'started') return 'due';
   if (backendStatus === 'compliant' || backendStatus === 'done') return 'compliant';
   if (backendStatus === 'pending') return 'pending';
+  if (backendStatus === 'awaiting_input') return 'needs setup';
   return '';
 };
 
@@ -54,6 +56,7 @@ const Dial = ({ status, size = 28 }) => {
   const getStatusColor = (s) => {
     if (s === 'past due') return '#A23E2A';
     if (s === 'due') return '#C98A1E';
+    if (s === 'needs setup') return '#8A5FBF';
     if (s === 'compliant') return '#3F6B52';
     return '#6B7280';
   };
@@ -61,6 +64,7 @@ const Dial = ({ status, size = 28 }) => {
   let angle = -120;
   if (status === 'compliant') angle = -60;
   if (status === 'due') angle = 0;
+  if (status === 'needs setup') angle = 30;
   if (status === 'past due') angle = 60;
 
   const strokeWidth = size * 0.12;
@@ -84,8 +88,9 @@ const Dial = ({ status, size = 28 }) => {
 };
 
 // A plain month-grid calendar. Days with at least one due item get a small
-// count badge; clicking ANY day navigates to the main ledger (per request -
-// "just a normal calendar... clickable taking you to the main calendar").
+// count badge. Clicking a day with exactly one item jumps straight to its
+// regulation; a day with several shows a small picker (via onDayClick,
+// which receives that day's items); an empty day just goes to the ledger.
 const MonthCalendar = ({ requirements, onDayClick }) => {
   const [cursor, setCursor] = useState(new Date());
 
@@ -95,17 +100,25 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
   const startWeekday = firstOfMonth.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const dueCountByDay = useMemo(() => {
-    const counts = {};
+  const itemsByDay = useMemo(() => {
+    const map = {};
     requirements.forEach((r) => {
       if (!r.nextDue) return;
       const d = new Date(r.nextDue);
       if (d.getFullYear() === year && d.getMonth() === month) {
-        counts[d.getDate()] = (counts[d.getDate()] || 0) + 1;
+        const day = d.getDate();
+        if (!map[day]) map[day] = [];
+        map[day].push(r);
       }
     });
-    return counts;
+    return map;
   }, [requirements, year, month]);
+
+  const dueCountByDay = useMemo(() => {
+    const counts = {};
+    Object.keys(itemsByDay).forEach((day) => { counts[day] = itemsByDay[day].length; });
+    return counts;
+  }, [itemsByDay]);
 
   const cells = [];
   for (let i = 0; i < startWeekday; i += 1) cells.push(null);
@@ -131,7 +144,7 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
             key={i}
             className={`mini-calendar-day ${d ? '' : 'empty'} ${isToday(d) ? 'today' : ''} ${d && dueCountByDay[d] ? 'has-due' : ''}`}
             disabled={!d}
-            onClick={() => d && onDayClick()}
+            onClick={() => d && onDayClick(itemsByDay[d] || [])}
           >
             {d && (
               <>
@@ -152,6 +165,7 @@ const ComplianceDashboard = ({ configData }) => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [openBreakdownCat, setOpenBreakdownCat] = useState(null);
+  const [calendarDayPicker, setCalendarDayPicker] = useState(null); // array of items when a multi-item day is clicked
   const [contacts, setContacts] = useState([]);
   const [archiveEntries, setArchiveEntries] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
@@ -233,6 +247,11 @@ const ComplianceDashboard = ({ configData }) => {
         await completeComplianceItem(id, {});
         console.log(`[Dashboard] confirmed compliant on item ${id}`);
         fetchArchive();
+      } else if (updates.kind === 'setFrequency') {
+        await setItemFrequency(id, { frequencyValue: updates.frequencyValue, frequencyUnit: updates.frequencyUnit || 'months' });
+        console.log(`[Dashboard] set frequency on item ${id}`, updates);
+        fetchItems();
+        return; // stay on the requirement page so the operator sees the new due date
       }
     } catch (err) {
       console.error('[Dashboard] handleRequirementUpdate failed:', err);
@@ -326,17 +345,19 @@ const ComplianceDashboard = ({ configData }) => {
     const items = requirements.filter((r) => r.category === catKey);
     if (items.some((r) => r.status === 'past due')) return 'past due';
     if (items.some((r) => r.status === 'due')) return 'due';
+    if (items.some((r) => r.status === 'needs setup')) return 'needs setup';
     if (items.length > 0 && items.every((r) => r.status === 'compliant')) return 'compliant';
     return '';
   };
 
   const categoryBreakdown = (catKey) => {
     const items = requirements.filter((r) => r.category === catKey);
-    const counts = { compliant: 0, due: 0, pastDue: 0, unset: 0 };
+    const counts = { compliant: 0, due: 0, pastDue: 0, needsSetup: 0, unset: 0 };
     items.forEach((r) => {
       if (r.status === 'compliant') counts.compliant += 1;
       else if (r.status === 'due') counts.due += 1;
       else if (r.status === 'past due') counts.pastDue += 1;
+      else if (r.status === 'needs setup') counts.needsSetup += 1;
       else counts.unset += 1;
     });
     return counts;
@@ -350,6 +371,18 @@ const ComplianceDashboard = ({ configData }) => {
   const toggleBreakdown = (catKey) => setOpenBreakdownCat((prev) => (prev === catKey ? null : catKey));
 
   const assignedItemsFor = (contactId) => requirements.filter((r) => r.assignedContactId === contactId);
+
+  const handleCalendarDayClick = (itemsForDay) => {
+    if (!itemsForDay || itemsForDay.length === 0) {
+      setCalendarDayPicker(null);
+      navigate('/dashboard');
+    } else if (itemsForDay.length === 1) {
+      setCalendarDayPicker(null);
+      navigate(`/dashboard/requirement/${itemsForDay[0].id}`);
+    } else {
+      setCalendarDayPicker(itemsForDay);
+    }
+  };
 
   // ---- Page components (each is a real route, so browser back/forward works) ----
 
@@ -410,6 +443,9 @@ const ComplianceDashboard = ({ configData }) => {
                           <div className={`cat-count-row cat-count-row--pastdue ${counts.pastDue === 0 ? 'is-zero' : ''}`}>
                             <span className="cat-count-dot"></span><span className="cat-count-name">Past Due</span><span className="cat-count-value">{counts.pastDue}</span>
                           </div>
+                          <div className={`cat-count-row cat-count-row--needssetup ${counts.needsSetup === 0 ? 'is-zero' : ''}`}>
+                            <span className="cat-count-dot" style={{ background: '#8A5FBF' }}></span><span className="cat-count-name">Needs Frequency</span><span className="cat-count-value">{counts.needsSetup}</span>
+                          </div>
                           <div className={`cat-count-row cat-count-row--unset ${counts.unset === 0 ? 'is-zero' : ''}`}>
                             <span className="cat-count-dot"></span><span className="cat-count-name">Not Completed</span><span className="cat-count-value">{counts.unset}</span>
                           </div>
@@ -440,6 +476,8 @@ const ComplianceDashboard = ({ configData }) => {
                       <td className="td-status">
                         {req.status === 'pending' ? (
                           <><span className="status-dot" style={{ background: '#6B7280' }}></span>Not completed</>
+                        ) : req.status === 'needs setup' ? (
+                          <><span className="status-dot" style={{ background: '#8A5FBF' }}></span>⚠ Needs frequency</>
                         ) : req.status ? (
                           <>
                             <span className="status-dot" style={{ background: req.status === 'past due' ? '#A23E2A' : req.status === 'due' ? '#C98A1E' : '#3F6B52' }}></span>
@@ -662,11 +700,36 @@ const ComplianceDashboard = ({ configData }) => {
           <a href="/dashboard/archive" onClick={(e) => { e.preventDefault(); navigate('/dashboard/archive'); }}>
             <i className="fas fa-archive" aria-hidden="true"></i><span>AUDIT ARCHIVE</span>
           </a>
+          <a href="/dashboard/settings" onClick={(e) => { e.preventDefault(); navigate('/dashboard/settings'); }}>
+            <i className="fas fa-cog" aria-hidden="true"></i><span>SYSTEM SETTINGS</span>
+          </a>
         </nav>
 
         {/* The physical calendar - a real month grid. Days with due items
-            show a count badge; clicking any day goes to the main ledger. */}
-        <MonthCalendar requirements={requirements} onDayClick={() => navigate('/dashboard')} />
+            show a count badge; clicking a day with one item jumps straight
+            to its regulation, a day with several shows the picker below. */}
+        <div style={{ position: 'relative' }}>
+          <MonthCalendar requirements={requirements} onDayClick={handleCalendarDayClick} />
+          {calendarDayPicker && (
+            <div className="category-breakdown-dropdown category-breakdown-dropdown--floating" style={{ position: 'absolute', top: 0, left: '100%', zIndex: 20, minWidth: 220 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <strong style={{ fontSize: 12 }}>DUE THIS DAY</strong>
+                <button type="button" onClick={() => setCalendarDayPicker(null)} style={{ border: 'none', background: 'none', cursor: 'pointer' }} aria-label="Close">✕</button>
+              </div>
+              {calendarDayPicker.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => { setCalendarDayPicker(null); navigate(`/dashboard/requirement/${item.id}`); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', padding: '6px 0', fontSize: 12 }}
+                >
+                  <span className="status-dot" style={{ background: item.status === 'past due' ? '#A23E2A' : item.status === 'due' ? '#C98A1E' : item.status === 'needs setup' ? '#8A5FBF' : item.status === 'compliant' ? '#3F6B52' : '#6B7280', marginRight: 6 }}></span>
+                  {item.description}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="user-badge">
           <strong>Jacob Kiage</strong>
@@ -683,6 +746,7 @@ const ComplianceDashboard = ({ configData }) => {
             <Route path="/dashboard/archive" element={<ArchivePage />} />
             <Route path="/dashboard/escalation" element={<EscalationPage />} />
             <Route path="/dashboard/vendors" element={<VendorsPage />} />
+            <Route path="/dashboard/settings" element={<SettingsPage contacts={contacts} vendorList={vendorList} onContactsChanged={fetchContacts} onVendorsChanged={fetchVendors} />} />
             <Route path="/dashboard/requirement/:id" element={<RequirementDetailPage />} />
           </Routes>
         )}

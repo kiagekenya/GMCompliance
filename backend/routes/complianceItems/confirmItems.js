@@ -59,29 +59,37 @@ const confirmItems = asyncHandler(async (req, res) => {
       continue;
     }
 
-    if (requirement.frequencyResolution === 'operator_defined' && !item.operatorDefinedFrequencyValue) {
-      validationErrors.push({
-        requirementId: item.requirementId,
-        title: requirement.title,
-        error: 'This requirement has no fixed regulatory interval - set your own interval before this item can go live.',
-      });
-      continue;
+    // Operator-defined requirements with no value supplied go live flagged
+    // as 'awaiting_input' instead of blocking the whole confirm request -
+    // the operator sets their own interval later, from that requirement's
+    // own page (see routes/complianceItems/setFrequency.js). An explicit
+    // operatorDefinedFrequencyValue in the request is still honored if
+    // ever supplied, for backward compatibility.
+    const isUnresolvedOperatorDefined = requirement.frequencyResolution === 'operator_defined'
+      && !item.operatorDefinedFrequencyValue;
+
+    let nextDueDate = null;
+    let actionWindowMonths = null;
+    let status = 'awaiting_input';
+    let frequencyValue = null;
+    let frequencyUnit = null;
+
+    if (!isUnresolvedOperatorDefined) {
+      frequencyValue = item.operatorDefinedFrequencyValue
+        || findVariantFrequency(requirement, item.frequencyVariantId)
+        || requirement.frequencyValue;
+      frequencyUnit = item.operatorDefinedFrequencyUnit
+        || findVariantUnit(requirement, item.frequencyVariantId)
+        || requirement.frequencyUnit
+        || 'months';
+
+      // today is used ONLY as the reference point for "when's it next due" math -
+      // it is deliberately NOT stored as anchorDate/lastCompletedDate, since
+      // nothing has actually been completed yet.
+      ({ nextDueDate, actionWindowMonths, status } = computeInitialSchedule(
+        new Date(), frequencyValue, frequencyUnit, false
+      ));
     }
-
-    const frequencyValue = item.operatorDefinedFrequencyValue
-      || findVariantFrequency(requirement, item.frequencyVariantId)
-      || requirement.frequencyValue;
-    const frequencyUnit = item.operatorDefinedFrequencyUnit
-      || findVariantUnit(requirement, item.frequencyVariantId)
-      || requirement.frequencyUnit
-      || 'months';
-
-    // today is used ONLY as the reference point for "when's it next due" math -
-    // it is deliberately NOT stored as anchorDate/lastCompletedDate, since
-    // nothing has actually been completed yet.
-    const { nextDueDate, actionWindowMonths, status } = computeInitialSchedule(
-      new Date(), frequencyValue, frequencyUnit, false
-    );
 
     upserts.push({
       updateOne: {
@@ -101,7 +109,7 @@ const confirmItems = asyncHandler(async (req, res) => {
             variantLabel: findVariantLabel(requirement, item.frequencyVariantId),
             resolvedFrequencyValue: frequencyValue,
             resolvedFrequencyUnit: frequencyUnit,
-            requiresOperatorInput: false,
+            requiresOperatorInput: isUnresolvedOperatorDefined,
             operatorDefinedJustification: item.operatorDefinedJustification || null,
             anchorDate: null,
             nextDueDate,

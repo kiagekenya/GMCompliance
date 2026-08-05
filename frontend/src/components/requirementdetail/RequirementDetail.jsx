@@ -33,13 +33,17 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
   const [newContact, setNewContact] = useState({ fullName: '', title: '', email: '', phone: '' });
   const [addingContact, setAddingContact] = useState(false);
 
+  const needsFrequency = requirement.requiresOperatorInput && !requirement.frequencyValue;
+  const [frequencyInput, setFrequencyInput] = useState('');
+  const [savingFrequency, setSavingFrequency] = useState(false);
+
   const employeeOptions = contactList.map((c) => ({ id: c._id, label: c.fullName }));
   const vendorOptions = vendorList.map((v) => ({ id: v._id || v.id, label: v.companyName || v }));
   const currentOptions = assigneeType === 'employee' ? employeeOptions : vendorOptions;
 
   const hasOwner = Boolean(requirement.assignedContactId || requirement.assignedVendorId);
   const hasEvidence = (requirement.pendingEvidenceUrls || []).length > 0;
-  const canMarkCompliant = hasOwner && hasEvidence;
+  const canMarkCompliant = hasOwner && hasEvidence && !needsFrequency;
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Not set';
@@ -74,6 +78,14 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
     onUpdate(requirement.id, { kind: 'complete' });
   };
 
+  const handleSaveFrequency = async () => {
+    const value = Number(frequencyInput);
+    if (!value || value <= 0) return;
+    setSavingFrequency(true);
+    await onUpdate(requirement.id, { kind: 'setFrequency', frequencyValue: value, frequencyUnit: 'months' });
+    setSavingFrequency(false);
+  };
+
   const handleAddContact = async () => {
     if (!newContact.fullName || !newContact.email || !newContact.phone) return;
     setAddingContact(true);
@@ -99,6 +111,35 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
 
       <h1 className="detail-title">{requirement.description}</h1>
       <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8 }}>{requirement.frequencyRule}</p>
+
+      {needsFrequency && (
+        <div className="detail-card" style={{ border: '1px solid #8A5FBF', background: 'rgba(138,95,191,0.08)', marginBottom: 16 }}>
+          <div className="card-label" style={{ color: '#8A5FBF' }}>⚠ NEEDS FREQUENCY</div>
+          <p style={{ fontSize: 13, margin: '6px 0 10px' }}>
+            This regulation has no fixed regulatory interval under PHMSA/TRRC - set your own review
+            interval before this item can be scheduled or marked compliant.
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="number"
+              min="1"
+              className="assignment-input"
+              placeholder="e.g. 12"
+              value={frequencyInput}
+              onChange={(e) => setFrequencyInput(e.target.value)}
+              style={{ maxWidth: 120 }}
+            />
+            <span style={{ fontSize: 13, opacity: 0.75 }}>months</span>
+            <button
+              className="action-button save"
+              onClick={handleSaveFrequency}
+              disabled={savingFrequency || !frequencyInput}
+            >
+              {savingFrequency ? 'SAVING…' : 'SET INTERVAL'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="detail-two-column">
         <div className="detail-card timeline-card">
@@ -154,14 +195,16 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
               className="action-button complete"
               onClick={handleMarkCompliant}
               disabled={!canMarkCompliant}
-              title={!canMarkCompliant ? 'Assign an owner and attach evidence first (via EDIT)' : ''}
+              title={!canMarkCompliant ? (needsFrequency ? 'Set a review interval first (above)' : 'Assign an owner and attach evidence first (via EDIT)') : ''}
             >
               <i className="fas fa-check-circle"></i> MARK COMPLIANT
             </button>
           </div>
           {!canMarkCompliant && (
             <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-              MARK COMPLIANT unlocks once an owner is assigned and at least one evidence file is attached in EDIT.
+              {needsFrequency
+                ? 'Set a review interval above before this can be scheduled or marked compliant.'
+                : 'MARK COMPLIANT unlocks once an owner is assigned and at least one evidence file is attached in EDIT.'}
             </p>
           )}
         </div>

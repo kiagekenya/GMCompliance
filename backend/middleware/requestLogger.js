@@ -1,18 +1,28 @@
 // middleware/requestLogger.js
 //
-// Mounted first, before every route. Logs method + path on the way in, and
-// status code + timing on the way out. This is deliberately simple (no
-// external logging library) so it's easy to read straight from the
-// terminal running `npm run dev`.
+// Mounted first, before every route. Only logs a request if it errored
+// (status >= 400) or was unusually slow - healthy, fast requests produce no
+// output, so the terminal isn't flooded during normal polling/browsing.
+// Set VERBOSE_HTTP_LOGS=true to log every request for debugging.
+
+const SLOW_REQUEST_MS = 1000;
 
 function requestLogger(req, res, next) {
   const start = Date.now();
-  console.log(`--> ${req.method} ${req.originalUrl}`);
+  const verbose = process.env.VERBOSE_HTTP_LOGS === 'true';
+
+  if (verbose) console.log(`--> ${req.method} ${req.originalUrl}`);
 
   res.on('finish', () => {
     const ms = Date.now() - start;
-    const marker = res.statusCode >= 400 ? '✗' : '✓';
-    console.log(`${marker} ${req.method} ${req.originalUrl} ${res.statusCode} (${ms}ms)`);
+    const isError = res.statusCode >= 400;
+    const isSlow = ms >= SLOW_REQUEST_MS;
+
+    if (verbose || isError || isSlow) {
+      const marker = isError ? '✗' : '✓';
+      const slowTag = isSlow ? ' [SLOW]' : '';
+      console.log(`${marker} ${req.method} ${req.originalUrl} ${res.statusCode} (${ms}ms)${slowTag}`);
+    }
   });
 
   next();

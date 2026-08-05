@@ -24,6 +24,10 @@ const completeItem = asyncHandler(async (req, res) => {
   const evidenceUrls = (req.body.evidenceUrls && req.body.evidenceUrls.length > 0) ? req.body.evidenceUrls : item.pendingEvidenceUrls;
   const completedDateRaw = req.body.completedDate || item.pendingCompletedDate;
 
+  if (item.requiresOperatorInput && !item.resolvedFrequencyValue) {
+    console.warn(`[compliance-items] operator ${req.operatorId}: blocked complete on ${item._id} - no frequency set yet`);
+    return res.status(422).json({ error: 'Set this requirement\'s review interval before it can be marked compliant.' });
+  }
   if (!hasOwner) {
     console.warn(`[compliance-items] operator ${req.operatorId}: blocked complete on ${item._id} - no owner assigned`);
     return res.status(422).json({ error: 'Assign an owner before this can be marked compliant.' });
