@@ -7,6 +7,7 @@ import SettingsPage from '../settings/SettingsPage';
 import {
   getComplianceItems, completeComplianceItem, updateComplianceItem, setItemFrequency,
   listContacts, addContact, getArchive, listVendors, addVendor, runStatusCheck,
+  uploadEvidence, acknowledgeReview, getEvidenceBlobUrl,
 } from '../../api/client';
 
 // 'pending' is the honest default for a never-completed item.
@@ -39,6 +40,7 @@ const mapItemForDisplay = (item) => ({
   pendingCompletedDate: item.pendingCompletedDate,
   pendingEvidenceUrls: item.pendingEvidenceUrls || [],
   pendingNotes: item.pendingNotes,
+  needsReview: Boolean(item.pendingSubmittedByAssignee) && !item.pendingReviewedAt && (item.pendingEvidenceUrls || []).length > 0,
   assignedContactId: item.assignedContactId?._id || null,
   assignedContactName: item.assignedContactId?.fullName || null,
   assignedVendorId: item.assignedVendorId?._id || null,
@@ -51,6 +53,13 @@ const formatDate = (dateString) => {
   if (!dateString) return '—';
   return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
+
+// Evidence entries can be a plain string (legacy - no real file behind it)
+// or an object { originalName, storedName, mimeType, ... } - see
+// backend/utils/evidenceStorage.js.
+const evidenceLabel = (entry) => (typeof entry === 'string' ? entry : entry.originalName);
+const evidenceKey = (entry, idx) => (typeof entry === 'string' ? entry : entry.storedName || idx);
+const isViewableEvidence = (entry) => typeof entry === 'object' && entry.storedName;
 
 const Dial = ({ status, size = 28 }) => {
   const getStatusColor = (s) => {
@@ -166,6 +175,7 @@ const ComplianceDashboard = ({ configData }) => {
   const [loadError, setLoadError] = useState('');
   const [openBreakdownCat, setOpenBreakdownCat] = useState(null);
   const [calendarDayPicker, setCalendarDayPicker] = useState(null); // array of items when a multi-item day is clicked
+  const [showReviewPopover, setShowReviewPopover] = useState(false);
   const [contacts, setContacts] = useState([]);
   const [archiveEntries, setArchiveEntries] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
@@ -231,6 +241,8 @@ const ComplianceDashboard = ({ configData }) => {
     return Array.from(seen.keys()).map((key) => ({ key, label: key }));
   }, [requirements]);
 
+  const needsReviewItems = useMemo(() => requirements.filter((r) => r.needsReview), [requirements]);
+
   const handleRequirementUpdate = async (id, updates) => {
     try {
       if (updates.kind === 'edit') {
@@ -252,6 +264,11 @@ const ComplianceDashboard = ({ configData }) => {
         console.log(`[Dashboard] set frequency on item ${id}`, updates);
         fetchItems();
         return; // stay on the requirement page so the operator sees the new due date
+      } else if (updates.kind === 'acknowledgeReview') {
+        await acknowledgeReview(id);
+        console.log(`[Dashboard] acknowledged review on item ${id}`);
+        fetchItems();
+        return; // silent - no navigation, this fires automatically on page open
       }
     } catch (err) {
       console.error('[Dashboard] handleRequirementUpdate failed:', err);
@@ -260,6 +277,16 @@ const ComplianceDashboard = ({ configData }) => {
     }
     fetchItems();
     navigate('/dashboard');
+  };
+
+  // Admin's own direct-attach action (distinct from an assignee's public
+  // upload link). Returns the updated item so RequirementDetail can update
+  // its local evidence list immediately, without waiting on this refetch.
+  const handleUploadEvidence = async (id, files) => {
+    const updated = await uploadEvidence(id, files);
+    console.log(`[Dashboard] uploaded ${files.length} file(s) to item ${id}`);
+    fetchItems();
+    return updated;
   };
 
   const handleAddContact = async (contactData) => {
@@ -469,6 +496,9 @@ const ComplianceDashboard = ({ configData }) => {
                         {req.requiresOperatorInput && !req.frequencyValue && (
                           <span style={{ marginLeft: 8, color: '#C98A1E', fontSize: 11 }}>⚠ needs interval</span>
                         )}
+                        {req.needsReview && (
+                          <span style={{ marginLeft: 8, color: '#2b7a4b', fontSize: 11 }} title="Evidence uploaded by assignee - needs review">📎 uploaded, needs review</span>
+                        )}
                       </td>
                       <td className="td-due">{formatDate(req.nextDue)}</td>
                       <td className="td-due">{formatDate(req.lastCompleted)}</td>
@@ -510,10 +540,21 @@ const ComplianceDashboard = ({ configData }) => {
         onBack={() => navigate('/dashboard')}
         onUpdate={handleRequirementUpdate}
         onAddContact={handleAddContact}
+        onUploadEvidence={handleUploadEvidence}
         vendorList={vendorList}
         contactList={contacts}
       />
     );
+  };
+
+  const handleViewArchiveEvidence = async (entry) => {
+    try {
+      const url = await getEvidenceBlobUrl(entry.storedName);
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error('[Dashboard] failed to open archived evidence:', err);
+      setLoadError(err.message);
+    }
   };
 
   const ArchivePage = () => (
@@ -536,7 +577,22 @@ const ComplianceDashboard = ({ configData }) => {
                   <td><strong>{entry.regulationTitle}</strong><div style={{ fontSize: 12, opacity: 0.7 }}>{entry.sourceRegulation}</div></td>
                   <td>{entry.categoryName}</td>
                   <td>{entry.completedBy}</td>
-                  <td>{(entry.evidenceUrls || []).join(', ') || '—'}</td>
+                  <td>
+                    {(entry.evidenceUrls || []).length === 0 ? '—' : (entry.evidenceUrls || []).map((ev, idx) => (
+                      <div key={evidenceKey(ev, idx)} style={{ fontSize: 12 }}>
+                        {evidenceLabel(ev)}
+                        {isViewableEvidence(ev) && (
+                          <button
+                            type="button"
+                            onClick={() => handleViewArchiveEvidence(ev)}
+                            style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', marginLeft: 6, fontSize: 12, padding: 0 }}
+                          >
+                            VIEW
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -682,9 +738,36 @@ const ComplianceDashboard = ({ configData }) => {
           <img src={CompanyLogo} alt="Galaxy Midstream" className="company-logo" />
         </div>
 
-        <div className="operator-section">
+        <div className="operator-section" style={{ position: 'relative' }}>
           <div className="operator-label">OPERATOR</div>
           <div className="operator-name">{configData?.operatorName || 'Yunoya LTD'}</div>
+          {needsReviewItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowReviewPopover((v) => !v)}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2b7a4b', fontSize: 12, padding: 0, marginTop: 6 }}
+            >
+              🔔 {needsReviewItems.length} need{needsReviewItems.length === 1 ? 's' : ''} review
+            </button>
+          )}
+          {showReviewPopover && (
+            <div className="category-breakdown-dropdown category-breakdown-dropdown--floating" style={{ position: 'absolute', top: '100%', left: 0, zIndex: 20, minWidth: 240 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <strong style={{ fontSize: 12 }}>NEEDS REVIEW</strong>
+                <button type="button" onClick={() => setShowReviewPopover(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }} aria-label="Close">✕</button>
+              </div>
+              {needsReviewItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => { setShowReviewPopover(false); navigate(`/dashboard/requirement/${item.id}`); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', padding: '6px 0', fontSize: 12 }}
+                >
+                  📎 {item.description}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <nav className="sidebar-nav">

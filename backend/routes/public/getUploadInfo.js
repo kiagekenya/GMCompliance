@@ -24,7 +24,10 @@ const getUploadInfo = asyncHandler(async (req, res) => {
     categoryName: item.requirementId?.categoryName,
     nextDueDate: item.nextDueDate,
     alreadySubmitted: (item.pendingEvidenceUrls || []).length > 0,
-    existingFiles: item.pendingEvidenceUrls || [],
+    // Names only - the public page never needs to view/open files, only
+    // list what's already there. Legacy entries (from before real file
+    // storage existed) are plain strings; new ones are objects.
+    existingFiles: (item.pendingEvidenceUrls || []).map((f) => (typeof f === 'string' ? f : f.originalName)),
   });
 });
 

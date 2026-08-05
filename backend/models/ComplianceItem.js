@@ -60,7 +60,13 @@ const complianceItemSchema = new mongoose.Schema({
   // completeItem.js) is what a second person clicks once these look right;
   // that's what actually finalizes things and clears these back to null.
   pendingCompletedDate: { type: Date, default: null },
-  pendingEvidenceUrls: { type: [String], default: [] },
+  // Mixed, not a strict subdocument schema: some already-existing items may
+  // have plain filename-string entries from before real file storage
+  // existed. New entries are objects: { originalName, storedName, mimeType,
+  // size, uploadedBy: 'assignee'|'admin', uploadedAt }. App code on both
+  // ends checks typeof entry === 'string' for the legacy case. See
+  // utils/evidenceStorage.js.
+  pendingEvidenceUrls: { type: [mongoose.Schema.Types.Mixed], default: [] },
   pendingNotes: { type: String, default: '' },
 
   // Lets an assigned person (who may have no system account at all) submit
@@ -69,8 +75,21 @@ const complianceItemSchema = new mongoose.Schema({
   // assignee. See routes/public/ for the unauthenticated endpoints this backs.
   uploadToken: { type: String, default: null, unique: true, sparse: true },
 
+  // Set true (and pendingReviewedAt reset to null) only by the public
+  // submit route (routes/public/submitUpload.js) - the admin's own direct
+  // attach (routes/complianceItems/uploadEvidence.js) never touches these,
+  // since an admin attaching their own evidence doesn't need a "review"
+  // notification. pendingReviewedAt is stamped the moment the admin opens
+  // this item's detail page (see RequirementDetail.jsx) - that's what
+  // clears the "needs review" badge/notification.
+  pendingSubmittedByAssignee: { type: Boolean, default: false },
+  pendingReviewedAt: { type: Date, default: null },
+
   lastCompletedDate: { type: Date, default: null },
-  completedEvidenceUrls: { type: [String], default: [] },
+  // Mixed, not a strict subdocument schema - see the comment on
+  // pendingEvidenceUrls above for why (legacy string entries must not
+  // throw a cast error).
+  completedEvidenceUrls: { type: [mongoose.Schema.Types.Mixed], default: [] },
 }, { timestamps: true });
 
 complianceItemSchema.index({ operatorId: 1, nextDueDate: 1 });

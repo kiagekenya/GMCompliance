@@ -61,6 +61,13 @@ const updateItemStatus = asyncHandler(async (req, res) => {
     item.customFrequencyValue = req.body.customFrequencyValue;
   }
 
+  // Opening the requirement's detail page (see RequirementDetail.jsx) fires
+  // this - it's what clears the "needs review" badge/notification once the
+  // admin has actually seen an assignee's submission.
+  if (req.body.acknowledgeReview === true) {
+    item.pendingReviewedAt = new Date();
+  }
+
   // No manual date picker for this anymore (see RequirementDetail.jsx) -
   // a date only means something once real evidence exists. If evidence is
   // being attached here without an explicit date, default to today rather

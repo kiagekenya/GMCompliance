@@ -7,9 +7,17 @@
 // has to review it and click MARK COMPLIANT on their end. That's the whole
 // point of the two-step design - a public, unauthenticated link can never
 // directly mark something compliant.
+//
+// Real files land on disk via the publicUpload multer middleware (see
+// routes/public/index.js) before this handler runs - req.files is the
+// array of saved files, each turned into a real evidence entry here. Also
+// flags pendingSubmittedByAssignee so the admin's dashboard shows a
+// "needs review" notification (see models/ComplianceItem.js).
 
+const path = require('path');
 const ComplianceItem = require('../../models/ComplianceItem');
 const asyncHandler = require('../../utils/asyncHandler');
+const { buildEvidenceEntry } = require('../../utils/evidenceStorage');
 
 const submitUpload = asyncHandler(async (req, res) => {
   const item = await ComplianceItem.findOne({ uploadToken: req.params.token });
@@ -19,19 +27,28 @@ const submitUpload = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'This upload link is invalid or has expired.' });
   }
 
-  const { evidenceUrls, notes, completedDate } = req.body;
-  if (!Array.isArray(evidenceUrls) || evidenceUrls.length === 0) {
+  const files = req.files || [];
+  if (files.length === 0) {
     return res.status(422).json({ error: 'Please attach at least one file before submitting.' });
   }
 
+  const destinationSubdir = path.join('public', req.params.token);
+  const newEntries = files.map((f) => buildEvidenceEntry(f, destinationSubdir, 'assignee'));
+
   // Append rather than overwrite - if they submit again later (e.g. adding
   // a second document), the first one isn't silently lost.
-  item.pendingEvidenceUrls = [...new Set([...(item.pendingEvidenceUrls || []), ...evidenceUrls])];
-  item.pendingNotes = notes || item.pendingNotes || '';
-  item.pendingCompletedDate = completedDate ? new Date(completedDate) : new Date();
+  item.pendingEvidenceUrls = [...(item.pendingEvidenceUrls || []), ...newEntries];
+  item.pendingNotes = req.body.notes || item.pendingNotes || '';
+  item.pendingCompletedDate = req.body.completedDate ? new Date(req.body.completedDate) : new Date();
+
+  // Every new submission (re)flags this for admin review, even if a
+  // previous submission was already reviewed.
+  item.pendingSubmittedByAssignee = true;
+  item.pendingReviewedAt = null;
+
   await item.save();
 
-  console.log(`[public/upload] ${evidenceUrls.length} file(s) submitted for item ${item._id} via public link (${item.pendingEvidenceUrls.length} total)`);
+  console.log(`[public/upload] ${newEntries.length} file(s) submitted for item ${item._id} via public link (${item.pendingEvidenceUrls.length} total)`);
   res.json({ submitted: true, message: 'Thanks - your submission has been recorded. An admin will review it shortly.' });
 });
 

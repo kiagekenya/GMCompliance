@@ -14,11 +14,17 @@ const PublicUpload = ({ token }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [info, setInfo] = useState(null);
-  const [files, setFiles] = useState([]);
   const [completedDate, setCompletedDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // existingFiles from the server is name-only (see getUploadInfo.js -
+  // the public page never needs to open/view files, just list what's
+  // already there). newFiles holds real File objects picked in this
+  // session, which is what actually gets uploaded on submit.
+  const [existingFileNames, setExistingFileNames] = useState([]);
+  const [newFiles, setNewFiles] = useState([]);
 
   useEffect(() => {
     fetch(`${BASE_URL}/public/upload/${token}`)
@@ -26,7 +32,7 @@ const PublicUpload = ({ token }) => {
       .then(({ ok, data }) => {
         if (!ok) throw new Error(data.error || 'This link is invalid.');
         setInfo(data);
-        setFiles(data.existingFiles || []);
+        setExistingFileNames(data.existingFiles || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -37,26 +43,33 @@ const PublicUpload = ({ token }) => {
   }, [token]);
 
   const handleFileSelect = (e) => {
-    const newNames = Array.from(e.target.files).map((f) => f.name);
-    setFiles((prev) => [...new Set([...prev, ...newNames])]);
+    const picked = Array.from(e.target.files);
+    setNewFiles((prev) => {
+      const existingNames = new Set(prev.map((f) => f.name));
+      return [...prev, ...picked.filter((f) => !existingNames.has(f.name))];
+    });
     e.target.value = '';
   };
 
-  const removeFile = (name) => setFiles((prev) => prev.filter((f) => f !== name));
+  const removeFile = (name) => setNewFiles((prev) => prev.filter((f) => f.name !== name));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (files.length === 0) {
+    if (newFiles.length === 0) {
       setError('Please attach at least one file first.');
       return;
     }
     setSubmitting(true);
     setError('');
     try {
+      const formData = new FormData();
+      newFiles.forEach((f) => formData.append('files', f));
+      formData.append('notes', notes);
+      formData.append('completedDate', completedDate);
+
       const res = await fetch(`${BASE_URL}/public/upload/${token}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ evidenceUrls: files, notes, completedDate }),
+        body: formData,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Submission failed.');
@@ -91,7 +104,12 @@ const PublicUpload = ({ token }) => {
       <p>Due: {info.nextDueDate ? new Date(info.nextDueDate).toLocaleDateString() : 'not set'}</p>
 
       {info.alreadySubmitted && (
-        <p style={{ color: '#C98A1E' }}>You already submitted something for this - you can add more files below or remove ones you no longer want.</p>
+        <div style={{ color: '#C98A1E' }}>
+          <p>You already submitted the following - add more files below if needed:</p>
+          <ul style={{ margin: '4px 0', paddingLeft: 20, fontSize: 13 }}>
+            {existingFileNames.map((name, i) => <li key={i}>{name}</li>)}
+          </ul>
+        </div>
       )}
 
       <form onSubmit={handleSubmit} style={{ marginTop: 20 }}>
@@ -112,12 +130,12 @@ const PublicUpload = ({ token }) => {
           <input type="file" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
         </label>
 
-        {files.length > 0 && (
+        {newFiles.length > 0 && (
           <div style={{ marginBottom: 16 }}>
-            {files.map((f) => (
-              <div key={f} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#f2f2f2', borderRadius: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 13 }}>📎 {f}</span>
-                <button type="button" onClick={() => removeFile(f)} style={{ border: 'none', background: 'none', color: '#c0392b', cursor: 'pointer' }}>✕</button>
+            {newFiles.map((f) => (
+              <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#f2f2f2', borderRadius: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 13 }}>📎 {f.name}</span>
+                <button type="button" onClick={() => removeFile(f.name)} style={{ border: 'none', background: 'none', color: '#c0392b', cursor: 'pointer' }}>✕</button>
               </div>
             ))}
           </div>

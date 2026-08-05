@@ -11,7 +11,12 @@ const completionLogSchema = new mongoose.Schema({
   completedDate: { type: Date, required: true },
   completedByContactId: { type: mongoose.Schema.Types.ObjectId, ref: 'Contact', default: null },
   completedByName: { type: String, default: '' }, // free text fallback - doesn't require an existing Contact record
-  evidenceUrls: { type: [String], default: [] },
+  // Mixed, not a strict subdocument schema: older entries are plain filename
+  // strings (from before real file storage existed), newer ones are objects
+  // { originalName, storedName, mimeType, size, uploadedBy, uploadedAt } -
+  // see utils/evidenceStorage.js. A strict schema would throw a cast error
+  // loading any pre-existing string-only entry.
+  evidenceUrls: { type: [mongoose.Schema.Types.Mixed], default: [] },
   notes: { type: String, default: '' },
 }, { timestamps: true });
 

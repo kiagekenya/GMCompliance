@@ -18,7 +18,8 @@ async function getClerkToken() {
 }
 
 async function request(path, { method = 'GET', body } = {}) {
-  console.log(`[api] --> ${method} ${path}`, body ? { body } : '');
+  const isFormData = body instanceof FormData;
+  console.log(`[api] --> ${method} ${path}`, body ? { body: isFormData ? '[FormData]' : body } : '');
 
   let token;
   try {
@@ -27,17 +28,18 @@ async function request(path, { method = 'GET', body } = {}) {
     throw err; // already logged in getClerkToken
   }
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+  // FormData (real file uploads) must NOT get a Content-Type header set
+  // here - the browser sets its own multipart boundary automatically, and
+  // overriding it breaks the upload.
+  const headers = { Authorization: `Bearer ${token}` };
+  if (!isFormData) headers['Content-Type'] = 'application/json';
 
   let response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : (body ? JSON.stringify(body) : undefined),
     });
   } catch (networkErr) {
     // fetch() itself threw - this is almost always "the backend isn't running"
@@ -93,3 +95,43 @@ export const listVendors = () => request('/vendors');
 export const addVendor = (payload) => request('/vendors', { method: 'POST', body: payload });
 export const updateVendor = (id, payload) => request(`/vendors/${id}`, { method: 'PATCH', body: payload });
 export const deleteVendor = (id) => request(`/vendors/${id}`, { method: 'DELETE' });
+
+// --- Evidence files ---
+// The admin's own "attach evidence directly" action - a real multipart
+// upload, distinct from an assignee submitting through their public link
+// (see components/publicupload/PublicUpload.jsx, which posts its own
+// FormData directly since that page isn't behind Clerk auth).
+export const uploadEvidence = (itemId, files) => {
+  const formData = new FormData();
+  files.forEach((f) => formData.append('files', f));
+  return request(`/compliance-items/${itemId}/evidence`, { method: 'POST', body: formData });
+};
+
+// Marks an assignee's submission as seen by the admin - fired when the
+// requirement's detail page opens (see RequirementDetail.jsx). Clears the
+// "needs review" badge/notification.
+export const acknowledgeReview = (itemId) => request(`/compliance-items/${itemId}`, { method: 'PATCH', body: { acknowledgeReview: true } });
+
+// Fetches an evidence file's real bytes as a Blob and returns an object URL
+// to open it with (window.open(url) or an <img>/<iframe> src). A plain
+// <a href> can't be used directly for this since GET /api/evidence/* is
+// authenticated and a normal browser navigation can't attach the Clerk
+// bearer token - it has to go through fetch() like every other call here.
+export async function getEvidenceBlobUrl(storedName) {
+  const token = await getClerkToken();
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}/evidence/${storedName}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (networkErr) {
+    console.error('[api] ✗ NETWORK ERROR fetching evidence:', networkErr.message);
+    throw new Error(`Could not reach the server at ${BASE_URL}. Is the backend running?`);
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `Could not load file: ${response.status}`);
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}

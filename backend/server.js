@@ -30,6 +30,7 @@ app.use('/api/compliance-items', require('./routes/complianceItems'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/public', require('./routes/public'));
+app.use('/api/evidence', require('./routes/evidence/serveEvidence'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

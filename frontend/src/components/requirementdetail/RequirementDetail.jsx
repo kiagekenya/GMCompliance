@@ -6,14 +6,53 @@
 //     Does NOT change status.
 //  2. MARK COMPLIANT - gated: disabled until an owner is assigned AND at
 //     least one evidence file is attached. Finalizes the completion.
+//
+// Evidence entries can be either a plain string (legacy - from before real
+// file storage existed, no actual file behind it) or an object
+// { originalName, storedName, mimeType, size, uploadedBy, uploadedAt } -
+// see backend/utils/evidenceStorage.js. Only object entries have a real
+// file that can be viewed.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './RequirementDetail.css';
+import { getEvidenceBlobUrl } from '../../api/client';
 
 const CUSTOM_VALUE = '__custom__';
 
-const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendorList = [], contactList = [] }) => {
+const evidenceLabel = (entry) => (typeof entry === 'string' ? entry : entry.originalName);
+const evidenceKey = (entry, idx) => (typeof entry === 'string' ? entry : entry.storedName || idx);
+const isViewable = (entry) => typeof entry === 'object' && entry.storedName;
+
+const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUploadEvidence, vendorList = [], contactList = [] }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [viewingKey, setViewingKey] = useState(null);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  // Opening this page is what clears the "needs review" notification (see
+  // Dashboard.jsx's sidebar badge and ledger icon). Keyed on requirement.id,
+  // not an empty dep array, since React Router reuses this same mounted
+  // component across different :id params rather than remounting it.
+  useEffect(() => {
+    if (requirement.needsReview) {
+      onUpdate(requirement.id, { kind: 'acknowledgeReview' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requirement.id]);
+
+  const handleViewEvidence = async (entry) => {
+    const key = evidenceKey(entry);
+    setViewingKey(key);
+    try {
+      const url = await getEvidenceBlobUrl(entry.storedName);
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error('[RequirementDetail] failed to open evidence:', err);
+      setUploadError(err.message);
+    } finally {
+      setViewingKey(null);
+    }
+  };
 
   const [assigneeType, setAssigneeType] = useState(requirement.assignedVendorId ? 'vendor' : 'employee');
   const currentAssignedId = assigneeType === 'vendor' ? requirement.assignedVendorId : requirement.assignedContactId;
@@ -50,17 +89,26 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
     return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  const handleFileSelect = (event) => {
-    // NOTE: this captures file NAMES only, as a placeholder - real file
-    // storage (e.g. S3) is a follow-up. Supports selecting several at once,
-    // and running it again just adds more (dedup by name).
-    const newNames = Array.from(event.target.files).map((f) => f.name);
-    setEvidenceFiles((prev) => [...new Set([...prev, ...newNames])]);
+  const handleFileSelect = async (event) => {
+    const picked = Array.from(event.target.files);
     event.target.value = ''; // allow re-selecting the same file name later
+    if (picked.length === 0) return;
+
+    setUploadError('');
+    setUploadingEvidence(true);
+    try {
+      const updated = await onUploadEvidence(requirement.id, picked);
+      setEvidenceFiles(updated.pendingEvidenceUrls || []);
+    } catch (err) {
+      console.error('[RequirementDetail] uploadEvidence failed:', err);
+      setUploadError(err.message);
+    } finally {
+      setUploadingEvidence(false);
+    }
   };
 
-  const removeEvidenceFile = (name) => {
-    setEvidenceFiles((prev) => prev.filter((f) => f !== name));
+  const removeEvidenceFile = (target) => {
+    setEvidenceFiles((prev) => prev.filter((f) => f !== target));
   };
 
   const handleSaveEdit = () => {
@@ -141,6 +189,17 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
         </div>
       )}
 
+      {requirement.needsReview && (
+        <div className="detail-card" style={{ border: '1px solid #2b7a4b', background: 'rgba(43,122,75,0.08)', marginBottom: 16 }}>
+          <div className="card-label" style={{ color: '#2b7a4b' }}>📎 EVIDENCE UPLOADED BY ASSIGNEE</div>
+          <p style={{ fontSize: 13, margin: '6px 0 0' }}>
+            The assignee submitted evidence through their upload link - review it below, then MARK COMPLIANT once it checks out.
+          </p>
+        </div>
+      )}
+
+      {uploadError && <p style={{ color: '#c0392b', fontSize: 13 }}>⚠ {uploadError}</p>}
+
       <div className="detail-two-column">
         <div className="detail-card timeline-card">
           <div className="card-label">TIMELINE</div>
@@ -176,9 +235,27 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
             </div>
           </div>
           {(requirement.pendingEvidenceUrls || []).length > 0 && (
-            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>
-              {requirement.pendingEvidenceUrls.map((f) => (
-                <div key={f}><i className="fas fa-paperclip"></i> {f}</div>
+            <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8 }}>
+              {requirement.pendingEvidenceUrls.map((entry, idx) => (
+                <div key={evidenceKey(entry, idx)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0' }}>
+                  <i className="fas fa-paperclip"></i>
+                  <span>
+                    {evidenceLabel(entry)}
+                    {typeof entry === 'object' && entry.uploadedBy && (
+                      <span style={{ opacity: 0.6 }}> — {entry.uploadedBy === 'assignee' ? 'submitted by assignee' : 'attached by admin'}</span>
+                    )}
+                  </span>
+                  {isViewable(entry) && (
+                    <button
+                      type="button"
+                      onClick={() => handleViewEvidence(entry)}
+                      disabled={viewingKey === evidenceKey(entry, idx)}
+                      style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', fontSize: 12, padding: 0 }}
+                    >
+                      {viewingKey === evidenceKey(entry, idx) ? 'opening…' : 'VIEW'}
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -254,20 +331,27 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, vendor
             </p>
           )}
 
-          <label className="upload-btn" style={{ marginTop: 14 }}>
+          <label className="upload-btn" style={{ marginTop: 14, opacity: uploadingEvidence ? 0.6 : 1, pointerEvents: uploadingEvidence ? 'none' : 'auto' }}>
             <i className="fas fa-cloud-upload-alt"></i>
-            ATTACH EVIDENCE (select one or more)
-            <input type="file" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
+            {uploadingEvidence ? 'UPLOADING…' : 'ATTACH EVIDENCE (select one or more)'}
+            <input type="file" multiple style={{ display: 'none' }} onChange={handleFileSelect} disabled={uploadingEvidence} />
           </label>
 
           {evidenceFiles.length > 0 && (
             <div style={{ marginTop: 8 }}>
-              {evidenceFiles.map((f) => (
-                <div key={f} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(0,0,0,0.04)', borderRadius: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 13 }}><i className="fas fa-paperclip"></i> {f}</span>
-                  <button type="button" onClick={() => removeEvidenceFile(f)} style={{ border: 'none', background: 'none', color: '#A23E2A', cursor: 'pointer' }} aria-label={`Remove ${f}`}>
-                    <i className="fas fa-times"></i>
-                  </button>
+              {evidenceFiles.map((entry, idx) => (
+                <div key={evidenceKey(entry, idx)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(0,0,0,0.04)', borderRadius: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 13 }}><i className="fas fa-paperclip"></i> {evidenceLabel(entry)}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {isViewable(entry) && (
+                      <button type="button" onClick={() => handleViewEvidence(entry)} style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', fontSize: 12 }}>
+                        VIEW
+                      </button>
+                    )}
+                    <button type="button" onClick={() => removeEvidenceFile(entry)} style={{ border: 'none', background: 'none', color: '#A23E2A', cursor: 'pointer' }} aria-label={`Remove ${evidenceLabel(entry)}`}>
+                      <i className="fas fa-times"></i>
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>

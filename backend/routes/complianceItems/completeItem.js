@@ -58,6 +58,8 @@ const completeItem = asyncHandler(async (req, res) => {
   updated.pendingCompletedDate = null;
   updated.pendingEvidenceUrls = [];
   updated.pendingNotes = '';
+  updated.pendingSubmittedByAssignee = false;
+  updated.pendingReviewedAt = null;
   await updated.save();
 
   console.log(`[compliance-items] operator ${req.operatorId}: CONFIRMED compliant on ${item._id} (by ${completedByName}), next due ${updated.nextDueDate}`);
