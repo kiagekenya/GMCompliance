@@ -15,8 +15,8 @@
 
 const ComplianceItem = require('../models/ComplianceItem');
 const CompletionLog = require('../models/CompletionLog');
-const { addFrequencyToDate, computeActionWindowMonths, computeStatus } = require('../utils/dateMath');
-const { notifyStatusTransition } = require('./notificationService');
+const { addFrequencyToDate, computeActionWindowMonths, computeStatus, computeReminderCheckpoints } = require('../utils/dateMath');
+const { notifyStatusTransition, notifyReminderCheckpoint } = require('./notificationService');
 
 function computeInitialSchedule(anchorDate, frequencyValue, frequencyUnit, everCompleted = false) {
   const nextDueDate = addFrequencyToDate(anchorDate, frequencyValue, frequencyUnit);
@@ -25,10 +25,12 @@ function computeInitialSchedule(anchorDate, frequencyValue, frequencyUnit, everC
   return { nextDueDate, actionWindowMonths, status };
 }
 
-// Emails only fire on a TRANSITION into 'due' or 'past_due' (checked by
-// comparing against the status already stored before this run) - not every
-// single day an item remains in that state, so people aren't spammed daily
-// for the same outstanding item.
+// Past-due escalation only fires on the TRANSITION into 'past_due' - a
+// single-shot email, not repeated daily. The pre-due 'due' window instead
+// gets an escalating reminder once per calendar-month checkpoint inside the
+// action window (see utils/dateMath.js's computeReminderCheckpoints) -
+// deduped against lastReminderCheckpointSentAt so the same month's
+// reminder never goes out twice, regardless of how often this runs.
 async function recalculateAllStatuses(operatorId = null) {
   const filter = {
     status: { $nin: ['started', 'done'] },
@@ -43,23 +45,43 @@ async function recalculateAllStatuses(operatorId = null) {
 
   let updated = 0;
   let notified = 0;
+  const now = new Date();
+
   for (const item of items) {
     const everCompleted = Boolean(item.lastCompletedDate);
     const previousStatus = item.status;
     const newStatus = computeStatus(item.nextDueDate, item.actionWindowMonths, everCompleted);
+    let changed = false;
 
     if (newStatus !== previousStatus) {
       item.status = newStatus;
-      await item.save();
+      changed = true;
       updated += 1;
 
-      const isNewlyDue = newStatus === 'due' && previousStatus !== 'due';
       const isNewlyPastDue = newStatus === 'past_due' && previousStatus !== 'past_due';
-      if ((isNewlyDue || isNewlyPastDue) && item.requirementId) {
+      if (isNewlyPastDue && item.requirementId) {
         await notifyStatusTransition(item, item.requirementId, newStatus);
         notified += 1;
       }
     }
+
+    if (newStatus === 'due' && item.requirementId) {
+      const checkpoints = computeReminderCheckpoints(item.nextDueDate, item.actionWindowMonths);
+      const dueCheckpoints = checkpoints.filter((c) => c <= now);
+      const latestCheckpoint = dueCheckpoints[dueCheckpoints.length - 1];
+      const alreadySent = item.lastReminderCheckpointSentAt
+        && latestCheckpoint
+        && item.lastReminderCheckpointSentAt.getTime() === latestCheckpoint.getTime();
+
+      if (latestCheckpoint && !alreadySent) {
+        await notifyReminderCheckpoint(item, item.requirementId, checkpoints, latestCheckpoint);
+        item.lastReminderCheckpointSentAt = latestCheckpoint;
+        changed = true;
+        notified += 1;
+      }
+    }
+
+    if (changed) await item.save();
   }
   return { checked: items.length, updated, notified };
 }
@@ -81,6 +103,8 @@ async function recordCompletion(complianceItem, { completedDate, completedByCont
   complianceItem.lastCompletedDate = completedDate;
   complianceItem.anchorDate = completedDate;
   complianceItem.completedEvidenceUrls = evidenceUrls || [];
+  // Fresh start for the next cycle's reminder checkpoints.
+  complianceItem.lastReminderCheckpointSentAt = null;
 
   // everCompleted = true here, always - this function only ever runs for a
   // real completion, so a far-off next date correctly shows 'compliant'.

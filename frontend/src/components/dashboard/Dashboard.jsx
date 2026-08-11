@@ -40,6 +40,8 @@ const mapItemForDisplay = (item) => ({
   pendingCompletedDate: item.pendingCompletedDate,
   pendingEvidenceUrls: item.pendingEvidenceUrls || [],
   pendingNotes: item.pendingNotes,
+  completedEvidenceUrls: item.completedEvidenceUrls || [],
+  reminderCheckpoints: item.reminderCheckpoints || [],
   needsReview: Boolean(item.pendingSubmittedByAssignee) && !item.pendingReviewedAt && (item.pendingEvidenceUrls || []).length > 0,
   assignedContactId: item.assignedContactId?._id || null,
   assignedContactName: item.assignedContactId?.fullName || null,
@@ -96,10 +98,33 @@ const Dial = ({ status, size = 28 }) => {
   );
 };
 
-// A plain month-grid calendar. Days with at least one due item get a small
-// count badge. Clicking a day with exactly one item jumps straight to its
-// regulation; a day with several shows a small picker (via onDayClick,
-// which receives that day's items); an empty day just goes to the ledger.
+// Worst-first: a day with even one past-due item reads as past-due
+// regardless of what else is due that day, and so on down the list.
+const STATUS_PRIORITY = ['past due', 'due', 'needs review', 'compliant', 'needs setup', 'pending'];
+const STATUS_CLASS = {
+  'past due': 'status-pastdue',
+  due: 'status-due',
+  'needs review': 'status-needsreview',
+  compliant: 'status-compliant',
+  'needs setup': 'status-setup',
+  pending: 'status-pending',
+};
+
+const statusKeyForItem = (r) => {
+  if (r.status === 'past due') return 'past due';
+  if (r.status === 'due') return 'due';
+  if (r.needsReview) return 'needs review';
+  if (r.status === 'compliant') return 'compliant';
+  if (r.status === 'needs setup') return 'needs setup';
+  return 'pending';
+};
+
+// A plain month-grid calendar. Each day is colored by the worst status
+// among its due items (see STATUS_PRIORITY) so compliant and non-compliant
+// days actually look different at a glance, not just a uniform badge.
+// Clicking a day with exactly one item jumps straight to its regulation; a
+// day with several shows a small picker (via onDayClick, which receives
+// that day's items); an empty day just goes to the ledger.
 const MonthCalendar = ({ requirements, onDayClick }) => {
   const [cursor, setCursor] = useState(new Date());
 
@@ -129,6 +154,15 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
     return counts;
   }, [itemsByDay]);
 
+  const dominantStatusByDay = useMemo(() => {
+    const result = {};
+    Object.keys(itemsByDay).forEach((day) => {
+      const statuses = itemsByDay[day].map(statusKeyForItem);
+      result[day] = STATUS_PRIORITY.find((s) => statuses.includes(s)) || 'pending';
+    });
+    return result;
+  }, [itemsByDay]);
+
   const cells = [];
   for (let i = 0; i < startWeekday; i += 1) cells.push(null);
   for (let d = 1; d <= daysInMonth; d += 1) cells.push(d);
@@ -151,7 +185,7 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
           <button
             type="button"
             key={i}
-            className={`mini-calendar-day ${d ? '' : 'empty'} ${isToday(d) ? 'today' : ''} ${d && dueCountByDay[d] ? 'has-due' : ''}`}
+            className={`mini-calendar-day ${d ? '' : 'empty'} ${isToday(d) ? 'today' : ''} ${d && dueCountByDay[d] ? 'has-due' : ''} ${d && dueCountByDay[d] ? STATUS_CLASS[dominantStatusByDay[d]] : ''}`}
             disabled={!d}
             onClick={() => d && onDayClick(itemsByDay[d] || [])}
           >
@@ -163,6 +197,12 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
             )}
           </button>
         ))}
+      </div>
+      <div className="mini-calendar-legend">
+        <span><i className="mini-calendar-legend-dot status-pastdue"></i>Past due</span>
+        <span><i className="mini-calendar-legend-dot status-due"></i>Due soon</span>
+        <span><i className="mini-calendar-legend-dot status-needsreview"></i>Needs review</span>
+        <span><i className="mini-calendar-legend-dot status-compliant"></i>Compliant</span>
       </div>
     </div>
   );
@@ -681,11 +721,11 @@ const ComplianceDashboard = ({ configData }) => {
         <div className="card-label" style={{ marginBottom: 10 }}>ADD CONTACT</div>
         {addContactError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addContactError}</p>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-          <input placeholder="Full name" value={newContact.fullName} onChange={(e) => setNewContact({ ...newContact, fullName: e.target.value })} />
-          <input placeholder="Title" value={newContact.title} onChange={(e) => setNewContact({ ...newContact, title: e.target.value })} />
-          <input placeholder="Email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
-          <input placeholder="Phone" value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} />
-          <input placeholder="Escalation level (1 = notified first)" type="number" min="1" value={newContact.escalationLevel} onChange={(e) => setNewContact({ ...newContact, escalationLevel: e.target.value })} />
+          <input className="form-input" placeholder="Full name" value={newContact.fullName} onChange={(e) => setNewContact({ ...newContact, fullName: e.target.value })} />
+          <input className="form-input" placeholder="Title" value={newContact.title} onChange={(e) => setNewContact({ ...newContact, title: e.target.value })} />
+          <input className="form-input" placeholder="Email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
+          <input className="form-input" placeholder="Phone" value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} />
+          <input className="form-input" placeholder="Escalation level (1 = notified first)" type="number" min="1" value={newContact.escalationLevel} onChange={(e) => setNewContact({ ...newContact, escalationLevel: e.target.value })} />
         </div>
         <button type="submit" className="action-button save" disabled={addingContact}>
           {addingContact ? 'ADDING…' : 'ADD CONTACT'}
@@ -698,6 +738,7 @@ const ComplianceDashboard = ({ configData }) => {
     <>
       <h2>Vendors</h2>
       <div className="ledger-scroll" style={{ height: 'auto' }}>
+        <div className="settings-section-header"><div className="card-label">VENDOR DIRECTORY</div></div>
         <table>
           <thead>
             <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th></tr>
@@ -718,11 +759,11 @@ const ComplianceDashboard = ({ configData }) => {
         <div className="card-label" style={{ marginBottom: 10 }}>ADD VENDOR</div>
         {addVendorError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addVendorError}</p>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-          <input placeholder="Company name" value={newVendor.companyName} onChange={(e) => setNewVendor({ ...newVendor, companyName: e.target.value })} />
-          <input placeholder="Contact person" value={newVendor.personnelName} onChange={(e) => setNewVendor({ ...newVendor, personnelName: e.target.value })} />
-          <input placeholder="Email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} />
-          <input placeholder="Phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} />
-          <input placeholder="Service scope" value={newVendor.serviceScope} onChange={(e) => setNewVendor({ ...newVendor, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
+          <input className="form-input" placeholder="Company name" value={newVendor.companyName} onChange={(e) => setNewVendor({ ...newVendor, companyName: e.target.value })} />
+          <input className="form-input" placeholder="Contact person" value={newVendor.personnelName} onChange={(e) => setNewVendor({ ...newVendor, personnelName: e.target.value })} />
+          <input className="form-input" placeholder="Email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} />
+          <input className="form-input" placeholder="Phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} />
+          <input className="form-input" placeholder="Service scope" value={newVendor.serviceScope} onChange={(e) => setNewVendor({ ...newVendor, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
         </div>
         <button type="submit" className="action-button save" disabled={addingVendor}>
           {addingVendor ? 'ADDING…' : 'ADD VENDOR'}

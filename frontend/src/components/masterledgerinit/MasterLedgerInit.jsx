@@ -68,6 +68,9 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
   // expression, so there's no operator-level PHMSA/TRRC toggle.
   const getRegulationText = () => '49 CFR Part 192 and TRRC (16 TAC)';
 
+  const describeMaterial = (m) => (m === 'Both' ? 'steel and plastic' : m.toLowerCase());
+  const describeType = (t) => (t === 'Both' ? 'transmission and distribution' : t.toLowerCase());
+
   const handleInitialize = async () => {
     setError('');
 
@@ -120,7 +123,7 @@ const MasterLedgerInit = ({ configData, onInitializeDashboard }) => {
 
           <p className="master-description">
             Matching your site against <strong>{getRegulationText()}</strong> for a{' '}
-            <strong>{material.toLowerCase()} {type.toLowerCase()} pipeline</strong>.
+            <strong>{describeMaterial(material)} {describeType(type)} pipeline</strong>.
           </p>
 
           {loading && <p className="master-note">Running the applicability engine…</p>}

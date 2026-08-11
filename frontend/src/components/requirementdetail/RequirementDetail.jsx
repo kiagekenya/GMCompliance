@@ -23,6 +23,36 @@ const evidenceLabel = (entry) => (typeof entry === 'string' ? entry : entry.orig
 const evidenceKey = (entry, idx) => (typeof entry === 'string' ? entry : entry.storedName || idx);
 const isViewable = (entry) => typeof entry === 'object' && entry.storedName;
 
+const formatDate = (dateString) => {
+  if (!dateString) return 'Not set';
+  return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+// Shared row renderer for every place evidence shows up (pending list in
+// the ASSIGNMENT card, the EDIT panel, and the COMPLIANCE RECORD card) -
+// keeps all three visually identical instead of three hand-rolled versions.
+const EvidenceRow = ({ entry, idx, onView, viewing, onRemove }) => (
+  <div className="document-item">
+    <i className="fas fa-paperclip doc-icon" aria-hidden="true"></i>
+    <div className="doc-details">
+      <span className="doc-name">{evidenceLabel(entry)}</span>
+      {typeof entry === 'object' && entry.uploadedBy && (
+        <span className="doc-meta">{entry.uploadedBy === 'assignee' ? 'Submitted by assignee' : 'Attached by admin'}</span>
+      )}
+    </div>
+    {isViewable(entry) && (
+      <button type="button" className="doc-view-btn" onClick={() => onView(entry)} disabled={viewing}>
+        {viewing ? 'opening…' : 'VIEW'}
+      </button>
+    )}
+    {onRemove && (
+      <button type="button" className="doc-remove-btn" onClick={() => onRemove(entry)} aria-label={`Remove ${evidenceLabel(entry)}`}>
+        <i className="fas fa-times"></i>
+      </button>
+    )}
+  </div>
+);
+
 const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUploadEvidence, vendorList = [], contactList = [] }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [viewingKey, setViewingKey] = useState(null);
@@ -62,9 +92,6 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
   // real evidence exists, and the backend auto-stamps "today" if evidence
   // is attached here without one. See the "Assigned On" display instead,
   // which is a separate, honest timestamp of when the assignment happened.
-
-  // Multiple evidence files - an array of file names (placeholder for real
-  // storage), each individually removable before saving.
   const [evidenceFiles, setEvidenceFiles] = useState(requirement.pendingEvidenceUrls || []);
   const [notes, setNotes] = useState(requirement.pendingNotes || '');
 
@@ -84,10 +111,13 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
   const hasEvidence = (requirement.pendingEvidenceUrls || []).length > 0;
   const canMarkCompliant = hasOwner && hasEvidence && !needsFrequency;
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Not set';
-    return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  };
+  // Reminder progress - "reminder N of M" - reminderCheckpoints is computed
+  // server-side (see backend/routes/complianceItems/getItems.js), the
+  // frontend just counts how many have already passed.
+  const reminderCheckpoints = requirement.reminderCheckpoints || [];
+  const now = new Date();
+  const reminderNumber = Math.max(1, reminderCheckpoints.filter((d) => new Date(d) <= now).length);
+  const totalReminders = reminderCheckpoints.length;
 
   const handleFileSelect = async (event) => {
     const picked = Array.from(event.target.files);
@@ -161,9 +191,9 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
       <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8 }}>{requirement.frequencyRule}</p>
 
       {needsFrequency && (
-        <div className="detail-card" style={{ border: '1px solid #8A5FBF', background: 'rgba(138,95,191,0.08)', marginBottom: 16 }}>
-          <div className="card-label" style={{ color: '#8A5FBF' }}>⚠ NEEDS FREQUENCY</div>
-          <p style={{ fontSize: 13, margin: '6px 0 10px' }}>
+        <div className="detail-card detail-banner detail-banner--warning">
+          <div className="card-label">⚠ Needs frequency</div>
+          <p>
             This regulation has no fixed regulatory interval under PHMSA/TRRC - set your own review
             interval before this item can be scheduled or marked compliant.
           </p>
@@ -190,11 +220,9 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
       )}
 
       {requirement.needsReview && (
-        <div className="detail-card" style={{ border: '1px solid #2b7a4b', background: 'rgba(43,122,75,0.08)', marginBottom: 16 }}>
-          <div className="card-label" style={{ color: '#2b7a4b' }}>📎 EVIDENCE UPLOADED BY ASSIGNEE</div>
-          <p style={{ fontSize: 13, margin: '6px 0 0' }}>
-            The assignee submitted evidence through their upload link - review it below, then MARK COMPLIANT once it checks out.
-          </p>
+        <div className="detail-card detail-banner detail-banner--attention">
+          <div className="card-label">📎 Evidence uploaded by assignee</div>
+          <p>The assignee submitted evidence through their upload link - review it below, then MARK COMPLIANT once it checks out.</p>
         </div>
       )}
 
@@ -219,6 +247,22 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
               </div>
             )}
           </div>
+
+          {requirement.status === 'due' && totalReminders > 0 && (
+            <div className="reminder-progress">
+              <div className="timeline-sub">REMINDER {reminderNumber} OF {totalReminders}</div>
+              <div className="reminder-progress-track">
+                {reminderCheckpoints.map((cp, i) => (
+                  <span key={i} className={`reminder-progress-segment ${i < reminderNumber ? 'filled' : ''}`}></span>
+                ))}
+              </div>
+              <div className="reminder-progress-dates">
+                {reminderCheckpoints.map((cp, i) => (
+                  <span key={i} className={i < reminderNumber ? 'sent' : ''}>{formatDate(cp)}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="detail-card assignment-card">
@@ -235,32 +279,41 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
             </div>
           </div>
           {(requirement.pendingEvidenceUrls || []).length > 0 && (
-            <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8 }}>
+            <div className="document-list" style={{ marginTop: 8 }}>
               {requirement.pendingEvidenceUrls.map((entry, idx) => (
-                <div key={evidenceKey(entry, idx)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0' }}>
-                  <i className="fas fa-paperclip"></i>
-                  <span>
-                    {evidenceLabel(entry)}
-                    {typeof entry === 'object' && entry.uploadedBy && (
-                      <span style={{ opacity: 0.6 }}> — {entry.uploadedBy === 'assignee' ? 'submitted by assignee' : 'attached by admin'}</span>
-                    )}
-                  </span>
-                  {isViewable(entry) && (
-                    <button
-                      type="button"
-                      onClick={() => handleViewEvidence(entry)}
-                      disabled={viewingKey === evidenceKey(entry, idx)}
-                      style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', fontSize: 12, padding: 0 }}
-                    >
-                      {viewingKey === evidenceKey(entry, idx) ? 'opening…' : 'VIEW'}
-                    </button>
-                  )}
-                </div>
+                <EvidenceRow
+                  key={evidenceKey(entry, idx)}
+                  entry={entry}
+                  onView={handleViewEvidence}
+                  viewing={viewingKey === evidenceKey(entry, idx)}
+                />
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {requirement.lastCompleted && (
+        <div className="detail-card detail-banner detail-banner--success">
+          <div className="card-label">✓ Marked compliant</div>
+          <p>
+            This regulation was marked compliant on {formatDate(requirement.lastCompleted)}.
+            {requirement.completedEvidenceUrls?.length > 0 ? ' Evidence on file:' : ' No evidence was retained for this completion.'}
+          </p>
+          {requirement.completedEvidenceUrls?.length > 0 && (
+            <div className="document-list">
+              {requirement.completedEvidenceUrls.map((entry, idx) => (
+                <EvidenceRow
+                  key={evidenceKey(entry, idx)}
+                  entry={entry}
+                  onView={handleViewEvidence}
+                  viewing={viewingKey === evidenceKey(entry, idx)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {!isEditing ? (
         <div className="detail-card action-card">
@@ -338,21 +391,15 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
           </label>
 
           {evidenceFiles.length > 0 && (
-            <div style={{ marginTop: 8 }}>
+            <div className="document-list" style={{ marginTop: 8 }}>
               {evidenceFiles.map((entry, idx) => (
-                <div key={evidenceKey(entry, idx)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(0,0,0,0.04)', borderRadius: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 13 }}><i className="fas fa-paperclip"></i> {evidenceLabel(entry)}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {isViewable(entry) && (
-                      <button type="button" onClick={() => handleViewEvidence(entry)} style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', fontSize: 12 }}>
-                        VIEW
-                      </button>
-                    )}
-                    <button type="button" onClick={() => removeEvidenceFile(entry)} style={{ border: 'none', background: 'none', color: '#A23E2A', cursor: 'pointer' }} aria-label={`Remove ${evidenceLabel(entry)}`}>
-                      <i className="fas fa-times"></i>
-                    </button>
-                  </span>
-                </div>
+                <EvidenceRow
+                  key={evidenceKey(entry, idx)}
+                  entry={entry}
+                  onView={handleViewEvidence}
+                  viewing={viewingKey === evidenceKey(entry, idx)}
+                  onRemove={removeEvidenceFile}
+                />
               ))}
             </div>
           )}

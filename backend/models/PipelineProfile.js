@@ -11,8 +11,10 @@ const pipelineProfileSchema = new mongoose.Schema({
   operatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Operator', required: true },
   segmentName: { type: String, default: null },
 
-  assetType: { type: String, enum: ['Distribution', 'Transmission'], required: true },
-  pipeMaterial: { type: String, enum: ['Steel', 'Plastic'], required: true },
+  // 'Both' means this profile matches every Asset_Type/Pipe_Material smart
+  // filter clause regardless of value - see utils/expressionEvaluator.js.
+  assetType: { type: String, enum: ['Distribution', 'Transmission', 'Both'], required: true },
+  pipeMaterial: { type: String, enum: ['Steel', 'Plastic', 'Both'], required: true },
   classLocation: { type: Number, enum: [1, 2, 3, 4], default: null },
 
   hasRegulatingStations: { type: Boolean, default: false },

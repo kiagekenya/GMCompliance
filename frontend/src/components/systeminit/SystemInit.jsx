@@ -334,6 +334,7 @@ const SystemInit = ({ onComplete }) => {
                       >
                         <option value="Steel">Steel</option>
                         <option value="Plastic">Plastic</option>
+                        <option value="Both">Both</option>
                       </select>
                     </div>
                     <div className="init-form-group">
@@ -346,6 +347,7 @@ const SystemInit = ({ onComplete }) => {
                       >
                         <option value="Transmission">Transmission</option>
                         <option value="Distribution">Distribution</option>
+                        <option value="Both">Both</option>
                       </select>
                     </div>
                   </div>

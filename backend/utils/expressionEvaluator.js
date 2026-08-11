@@ -32,6 +32,16 @@ function evaluateClause(clause, profile) {
   const profileValue = profile[profileKey];
   const targetValue = parseLiteral(rawValue.trim());
 
+  // "Both" on assetType/pipeMaterial means "matches every clause that
+  // checks this field" - e.g. a profile with assetType: "Both" should
+  // satisfy both "Asset_Type == \"Transmission\"" and
+  // "Asset_Type == \"Distribution\"" clauses. Every clause in the actual
+  // catalog that checks these two fields uses ==, so this only needs to
+  // special-case equality.
+  if ((profileKey === 'assetType' || profileKey === 'pipeMaterial') && profileValue === 'Both' && operator === '==') {
+    return true;
+  }
+
   switch (operator) {
     case '==': return profileValue == targetValue; // eslint-disable-line eqeqeq
     case '!=': return profileValue != targetValue; // eslint-disable-line eqeqeq

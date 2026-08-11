@@ -332,13 +332,14 @@
 }
 
 .action-button.edit {
-  background-color: orange;
+  background-color: #ffffff;
   border-color: var(--border-color, #e2e8f0);
   color: var(--text-main, #1e293b);
 }
 
 .action-button.edit:hover {
   background-color: var(--bg-app, #f4f6f8);
+  border-color: #94a3b8;
 }
 
 .action-button.dispatch {
@@ -510,4 +511,99 @@
   margin-bottom: 0.5rem;
   opacity: 0.5;
   display: block;
+}
+
+/* ==========================================================================
+   7. BANNERS (needs-frequency / needs-review / compliance record)
+   One shared visual language instead of ad hoc inline colors per state.
+   ========================================================================== */
+.detail-banner {
+  gap: 0.6rem;
+}
+
+.detail-banner p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.detail-banner--warning {
+  background-color: var(--color-setup-bg, #f3effa);
+  border-color: var(--color-setup, #8a5fbf);
+}
+.detail-banner--warning .card-label {
+  color: var(--color-setup, #8a5fbf);
+}
+
+.detail-banner--attention {
+  background-color: var(--color-review-bg, #e6f6f9);
+  border-color: var(--color-review, #0891b2);
+}
+.detail-banner--attention .card-label {
+  color: var(--color-review, #0891b2);
+}
+
+.detail-banner--success {
+  background-color: var(--color-compliant-bg, #eaf3ed);
+  border-color: var(--color-compliant, #3f6b52);
+}
+.detail-banner--success .card-label {
+  color: var(--color-compliant, #3f6b52);
+}
+
+.doc-view-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  white-space: nowrap;
+}
+.doc-view-btn:hover {
+  text-decoration: underline;
+}
+.doc-view-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ==========================================================================
+   8. REMINDER PROGRESS (inside the TIMELINE card, only shown while 'due')
+   ========================================================================== */
+.reminder-progress {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.reminder-progress-track {
+  display: flex;
+  gap: 4px;
+  margin: 0.4rem 0 0.35rem;
+}
+
+.reminder-progress-segment {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--border-color, #e2e8f0);
+}
+
+.reminder-progress-segment.filled {
+  background-color: var(--color-due, #c98a1e);
+}
+
+.reminder-progress-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-muted, #64748b);
+}
+
+.reminder-progress-dates .sent {
+  color: var(--color-due, #c98a1e);
+  font-weight: 700;
 }

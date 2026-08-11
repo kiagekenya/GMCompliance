@@ -53,7 +53,11 @@ async function getSuggestedItems(profile) {
 
     else if (req.frequencyResolution === 'variant_expand_all') {
       for (const variant of req.frequencyVariants) {
+        // profile.assetType === 'Both' means every audience-specific
+        // variant applies (e.g. both "Affected Public (Transmission)" and
+        // "(Distribution)" rows), not just the ones matching a single type.
         if (variant.pipelineTypeOverride && variant.pipelineTypeOverride !== 'Both'
+            && profile.assetType !== 'Both'
             && variant.pipelineTypeOverride !== profile.assetType) {
           continue; // this audience-variant doesn't apply to this operator's asset type
         }

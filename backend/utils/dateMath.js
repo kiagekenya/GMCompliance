@@ -49,4 +49,21 @@ function computeStatus(nextDueDate, actionWindowMonths, everCompleted = false) {
   return everCompleted ? 'compliant' : 'pending';        // Passive Window - but only "compliant" if it's real
 }
 
-module.exports = { addFrequencyToDate, computeActionWindowMonths, computeStatus };
+// Escalating reminder checkpoints: one per calendar month inside the action
+// window, ending on the 1st of the due month itself. E.g. a 12-month item
+// (3-month action window) due in December gets checkpoints at Oct 1, Nov 1,
+// Dec 1. actionWindowMonths can be fractional (e.g. 2.5) - rounded to the
+// nearest whole number of monthly checkpoints, minimum 1, since "reminder
+// every calendar month" only makes sense as a whole-month count.
+function computeReminderCheckpoints(nextDueDate, actionWindowMonths) {
+  if (!nextDueDate) return [];
+  const numCheckpoints = Math.max(1, Math.round(actionWindowMonths || 0));
+  const due = new Date(nextDueDate);
+  const checkpoints = [];
+  for (let i = numCheckpoints - 1; i >= 0; i -= 1) {
+    checkpoints.push(new Date(due.getFullYear(), due.getMonth() - i, 1));
+  }
+  return checkpoints;
+}
+
+module.exports = { addFrequencyToDate, computeActionWindowMonths, computeStatus, computeReminderCheckpoints };

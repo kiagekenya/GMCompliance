@@ -26,6 +26,13 @@ const complianceItemSchema = new mongoose.Schema({
   nextDueDate: { type: Date, default: null },
   actionWindowMonths: { type: Number, default: null },
 
+  // Tracks which monthly reminder checkpoint (see utils/dateMath.js's
+  // computeReminderCheckpoints) was last emailed, so the daily job in
+  // schedulingEngine.js doesn't resend the same month's reminder every day
+  // it runs. Reset to null in recordCompletion so the next cycle starts
+  // fresh.
+  lastReminderCheckpointSentAt: { type: Date, default: null },
+
   // pending        = never yet completed. nextDueDate IS computed and shown
   //                  from creation - only anchorDate/lastCompletedDate stay
   //                  null until a real completion happens. This is the

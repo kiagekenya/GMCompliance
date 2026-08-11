@@ -12,12 +12,15 @@
 
 const ComplianceItem = require('../../models/ComplianceItem');
 const { recordCompletion } = require('../../services/schedulingEngine');
+const { notifyCompletion } = require('../../services/notificationService');
+const { computeReminderCheckpoints } = require('../../utils/dateMath');
 const asyncHandler = require('../../utils/asyncHandler');
 
 const completeItem = asyncHandler(async (req, res) => {
   const item = await ComplianceItem.findOne({ _id: req.params.id, operatorId: req.operatorId })
-    .populate('assignedContactId', 'fullName')
-    .populate('assignedVendorId', 'companyName personnelName');
+    .populate('assignedContactId', 'fullName email')
+    .populate('assignedVendorId', 'companyName personnelName email')
+    .populate('requirementId', 'title sourceRegulation');
   if (!item) return res.status(404).json({ error: 'Compliance item not found' });
 
   const hasOwner = Boolean(item.assignedContactId || item.assignedVendorId);
@@ -63,6 +66,14 @@ const completeItem = asyncHandler(async (req, res) => {
   await updated.save();
 
   console.log(`[compliance-items] operator ${req.operatorId}: CONFIRMED compliant on ${item._id} (by ${completedByName}), next due ${updated.nextDueDate}`);
+
+  // Non-blocking - an email failure must never fail the completion itself,
+  // it's already saved by this point.
+  if (updated.requirementId) {
+    const checkpoints = computeReminderCheckpoints(updated.nextDueDate, updated.actionWindowMonths);
+    notifyCompletion(updated, updated.requirementId, checkpoints)
+      .catch((err) => console.error(`[compliance-items] notifyCompletion failed for item ${updated._id}:`, err.message));
+  }
 
   const populated = await ComplianceItem.findById(updated._id)
     .populate('assignedContactId', 'fullName title')

@@ -18,6 +18,10 @@
   --color-pastdue: #a23e2a;
   --color-pastdue-bg: #fdf0ed;
   --color-unset: #6b7280;
+  --color-setup: #8a5fbf;
+  --color-setup-bg: #f3effa;
+  --color-review: #0891b2;
+  --color-review-bg: #e6f6f9;
 
   /* Typography Colors */
   --text-main: #1e293b;
@@ -327,6 +331,147 @@ td {
 .td-due {
   white-space: nowrap;
   font-weight: 500;
+}
+
+/* ==========================================================================
+   SETTINGS / VENDORS PAGES
+   ========================================================================== */
+.settings-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-section-header .card-label {
+  margin: 0;
+}
+
+.settings-section-body {
+  padding: 16px;
+}
+
+.profile-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.profile-stat {
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.profile-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+  display: block;
+}
+
+.profile-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.profile-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.profile-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: var(--text-muted);
+}
+
+.profile-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+.profile-chip.on {
+  border-color: rgba(63, 107, 82, 0.3);
+  background: var(--color-compliant-bg);
+  color: var(--text-main);
+}
+
+.profile-chip.on .profile-chip-dot {
+  background: var(--color-compliant);
+}
+
+.table-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.table-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+  background: #ffffff;
+  color: var(--text-main);
+}
+
+.form-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.row-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.row-icon-btn:hover {
+  background: var(--bg-app);
+  color: var(--text-main);
+}
+
+.row-icon-btn.danger:hover {
+  color: var(--color-pastdue);
+  border-color: rgba(162, 62, 42, 0.3);
+  background: var(--color-pastdue-bg);
 }
 
 .td-assign {
@@ -649,20 +794,37 @@ td {
   cursor: default;
 }
 
-.mini-calendar-day.today {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
 .mini-calendar-day.has-due {
   font-weight: 700;
+}
+
+/* Each day is colored by the worst status among its due items (see
+   Dashboard.jsx's STATUS_PRIORITY) - compliant and non-compliant days need
+   to actually look different at a glance, not just carry the same badge. */
+.mini-calendar-day.status-pastdue { background: var(--color-pastdue, #a23e2a); color: #ffffff; }
+.mini-calendar-day.status-due { background: var(--color-due, #c98a1e); color: #14191c; }
+.mini-calendar-day.status-needsreview { background: var(--color-review, #0891b2); color: #ffffff; }
+.mini-calendar-day.status-compliant { background: var(--color-compliant, #3f6b52); color: #ffffff; }
+.mini-calendar-day.status-setup { background: var(--color-setup, #8a5fbf); color: #ffffff; }
+.mini-calendar-day.status-pending { background: rgba(255, 255, 255, 0.12); }
+
+.mini-calendar-day.status-pastdue:hover:not(.empty) { background: var(--color-pastdue, #a23e2a); filter: brightness(1.15); }
+.mini-calendar-day.status-due:hover:not(.empty) { background: var(--color-due, #c98a1e); filter: brightness(1.15); }
+.mini-calendar-day.status-needsreview:hover:not(.empty) { background: var(--color-review, #0891b2); filter: brightness(1.15); }
+.mini-calendar-day.status-compliant:hover:not(.empty) { background: var(--color-compliant, #3f6b52); filter: brightness(1.15); }
+.mini-calendar-day.status-setup:hover:not(.empty) { background: var(--color-setup, #8a5fbf); filter: brightness(1.15); }
+.mini-calendar-day.status-pending:hover:not(.empty) { background: rgba(255, 255, 255, 0.2); }
+
+.mini-calendar-day.today {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
 }
 
 .mini-calendar-badge {
   position: absolute;
   top: -2px;
   right: -2px;
-  background: #C98A1E;
-  color: #14191C;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffffff;
   border-radius: 50%;
   width: 13px;
   height: 13px;
@@ -672,3 +834,32 @@ td {
   justify-content: center;
   font-weight: 700;
 }
+
+.mini-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  padding: 0 4px;
+  font-size: 9px;
+  opacity: 0.8;
+}
+
+.mini-calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.mini-calendar-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.mini-calendar-legend-dot.status-pastdue { background: var(--color-pastdue, #a23e2a); }
+.mini-calendar-legend-dot.status-due { background: var(--color-due, #c98a1e); }
+.mini-calendar-legend-dot.status-needsreview { background: var(--color-review, #0891b2); }
+.mini-calendar-legend-dot.status-compliant { background: var(--color-compliant, #3f6b52); }
