@@ -607,3 +607,39 @@
   color: var(--color-due, #c98a1e);
   font-weight: 700;
 }
+
+.reminder-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.reminder-edit-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.reminder-edit-link:hover {
+  text-decoration: underline;
+}
+
+.reminder-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.reminder-edit-row .assignment-input {
+  flex: 1;
+}
+.reminder-edit-row button {
+  background: none;
+  border: none;
+  color: var(--color-pastdue, #a23e2a);
+  cursor: pointer;
+  padding: 4px;
+}

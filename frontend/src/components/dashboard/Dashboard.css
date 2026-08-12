@@ -863,3 +863,27 @@ td {
 .mini-calendar-legend-dot.status-due { background: var(--color-due, #c98a1e); }
 .mini-calendar-legend-dot.status-needsreview { background: var(--color-review, #0891b2); }
 .mini-calendar-legend-dot.status-compliant { background: var(--color-compliant, #3f6b52); }
+
+/* Reminder checkpoint marker - separate from the due-date badge/color, since
+   a reminder date is usually a different day than the actual due date. */
+.mini-calendar-reminder-dot {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.mini-calendar-reminder-dot--legend {
+  position: static;
+  transform: none;
+  display: inline-block;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
+  width: 7px;
+  height: 7px;
+}

@@ -66,4 +66,19 @@ function computeReminderCheckpoints(nextDueDate, actionWindowMonths) {
   return checkpoints;
 }
 
-module.exports = { addFrequencyToDate, computeActionWindowMonths, computeStatus, computeReminderCheckpoints };
+// Every place that needs an item's ACTUAL reminder schedule (not just the
+// computed default) should go through this, not computeReminderCheckpoints
+// directly - customReminderDates (see models/ComplianceItem.js) is a full
+// override for the current cycle, set via the "EDIT REMINDERS" UI. Falls
+// back to the computed monthly checkpoints when there's no override.
+function resolveReminderCheckpoints(customReminderDates, nextDueDate, actionWindowMonths) {
+  if (Array.isArray(customReminderDates) && customReminderDates.length > 0) {
+    return [...customReminderDates].map((d) => new Date(d)).sort((a, b) => a - b);
+  }
+  return computeReminderCheckpoints(nextDueDate, actionWindowMonths);
+}
+
+module.exports = {
+  addFrequencyToDate, computeActionWindowMonths, computeStatus,
+  computeReminderCheckpoints, resolveReminderCheckpoints,
+};

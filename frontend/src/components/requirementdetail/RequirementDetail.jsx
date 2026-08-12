@@ -119,6 +119,38 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
   const reminderNumber = Math.max(1, reminderCheckpoints.filter((d) => new Date(d) <= now).length);
   const totalReminders = reminderCheckpoints.length;
 
+  const [editingReminders, setEditingReminders] = useState(false);
+  const [reminderDraft, setReminderDraft] = useState([]);
+  const [savingReminders, setSavingReminders] = useState(false);
+  const toDateInputValue = (d) => new Date(d).toISOString().slice(0, 10);
+
+  const startEditReminders = () => {
+    setReminderDraft(reminderCheckpoints.map(toDateInputValue));
+    setEditingReminders(true);
+  };
+  const updateReminderDraftDate = (idx, value) => {
+    setReminderDraft((prev) => prev.map((d, i) => (i === idx ? value : d)));
+  };
+  const removeReminderDraftDate = (idx) => {
+    setReminderDraft((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const addReminderDraftDate = () => {
+    setReminderDraft((prev) => [...prev, toDateInputValue(new Date())]);
+  };
+  const handleSaveReminders = async () => {
+    if (reminderDraft.length === 0) return; // use RESET instead of saving an empty list
+    setSavingReminders(true);
+    await onUpdate(requirement.id, { kind: 'setReminderDates', dates: reminderDraft });
+    setSavingReminders(false);
+    setEditingReminders(false);
+  };
+  const handleResetReminders = async () => {
+    setSavingReminders(true);
+    await onUpdate(requirement.id, { kind: 'setReminderDates', dates: [] });
+    setSavingReminders(false);
+    setEditingReminders(false);
+  };
+
   const handleFileSelect = async (event) => {
     const picked = Array.from(event.target.files);
     event.target.value = ''; // allow re-selecting the same file name later
@@ -248,9 +280,12 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
             )}
           </div>
 
-          {requirement.status === 'due' && totalReminders > 0 && (
+          {requirement.status === 'due' && totalReminders > 0 && !editingReminders && (
             <div className="reminder-progress">
-              <div className="timeline-sub">REMINDER {reminderNumber} OF {totalReminders}</div>
+              <div className="reminder-progress-header">
+                <span className="timeline-sub">REMINDER {reminderNumber} OF {totalReminders}</span>
+                <button type="button" className="reminder-edit-link" onClick={startEditReminders}>EDIT REMINDERS</button>
+              </div>
               <div className="reminder-progress-track">
                 {reminderCheckpoints.map((cp, i) => (
                   <span key={i} className={`reminder-progress-segment ${i < reminderNumber ? 'filled' : ''}`}></span>
@@ -260,6 +295,40 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
                 {reminderCheckpoints.map((cp, i) => (
                   <span key={i} className={i < reminderNumber ? 'sent' : ''}>{formatDate(cp)}</span>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {requirement.status === 'due' && editingReminders && (
+            <div className="reminder-progress">
+              <div className="timeline-sub" style={{ marginBottom: 6 }}>EDIT REMINDER DATES</div>
+              {reminderDraft.map((dateVal, i) => (
+                <div key={i} className="reminder-edit-row">
+                  <input
+                    type="date"
+                    className="assignment-input"
+                    value={dateVal}
+                    onChange={(e) => updateReminderDraftDate(i, e.target.value)}
+                  />
+                  <button type="button" onClick={() => removeReminderDraftDate(i)} aria-label="Remove reminder date">
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="reminder-edit-link" onClick={addReminderDraftDate}>+ ADD REMINDER DATE</button>
+
+              <div className="action-buttons" style={{ marginTop: 10 }}>
+                <button className="action-button save" onClick={handleSaveReminders} disabled={savingReminders || reminderDraft.length === 0}>
+                  {savingReminders ? 'SAVING…' : 'SAVE'}
+                </button>
+                <button className="action-button cancel" onClick={() => setEditingReminders(false)} disabled={savingReminders}>
+                  CANCEL
+                </button>
+                {requirement.hasCustomReminderDates && (
+                  <button className="action-button cancel" onClick={handleResetReminders} disabled={savingReminders}>
+                    RESET TO AUTO-COMPUTED
+                  </button>
+                )}
               </div>
             </div>
           )}

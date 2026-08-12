@@ -82,6 +82,8 @@ export const getArchive = () => request('/compliance-items/archive');
 export const updateComplianceItem = (id, payload) => request(`/compliance-items/${id}`, { method: 'PATCH', body: payload });
 export const completeComplianceItem = (id, payload) => request(`/compliance-items/${id}/complete`, { method: 'POST', body: payload });
 export const setItemFrequency = (id, payload) => request(`/compliance-items/${id}/set-frequency`, { method: 'POST', body: payload });
+// dates: array of Date/ISO strings, or [] to reset back to the auto-computed schedule.
+export const setReminderDates = (id, dates) => request(`/compliance-items/${id}`, { method: 'PATCH', body: { customReminderDates: dates } });
 export const runStatusCheck = () => request('/compliance-items/run-status-check', { method: 'POST' });
 
 // --- Contacts ---

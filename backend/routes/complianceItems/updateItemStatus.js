@@ -61,6 +61,19 @@ const updateItemStatus = asyncHandler(async (req, res) => {
     item.customFrequencyValue = req.body.customFrequencyValue;
   }
 
+  // Full override of the reminder schedule for the current cycle - see
+  // "EDIT REMINDERS" on RequirementDetail.jsx. An empty array is treated
+  // the same as null (reset to the computed default) - the frontend
+  // doesn't let you save zero dates, "reset" is a distinct explicit action,
+  // but either shape lands here the same way.
+  if (req.body.customReminderDates !== undefined) {
+    const dates = req.body.customReminderDates;
+    item.customReminderDates = Array.isArray(dates) && dates.length > 0
+      ? dates.map((d) => new Date(d)).sort((a, b) => a - b)
+      : null;
+    item.lastReminderCheckpointSentAt = null; // schedule changed - re-evaluate from scratch
+  }
+
   // Opening the requirement's detail page (see RequirementDetail.jsx) fires
   // this - it's what clears the "needs review" badge/notification once the
   // admin has actually seen an assignee's submission.

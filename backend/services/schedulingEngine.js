@@ -15,7 +15,7 @@
 
 const ComplianceItem = require('../models/ComplianceItem');
 const CompletionLog = require('../models/CompletionLog');
-const { addFrequencyToDate, computeActionWindowMonths, computeStatus, computeReminderCheckpoints } = require('../utils/dateMath');
+const { addFrequencyToDate, computeActionWindowMonths, computeStatus, resolveReminderCheckpoints } = require('../utils/dateMath');
 const { notifyStatusTransition, notifyReminderCheckpoint } = require('./notificationService');
 
 function computeInitialSchedule(anchorDate, frequencyValue, frequencyUnit, everCompleted = false) {
@@ -66,7 +66,7 @@ async function recalculateAllStatuses(operatorId = null) {
     }
 
     if (newStatus === 'due' && item.requirementId) {
-      const checkpoints = computeReminderCheckpoints(item.nextDueDate, item.actionWindowMonths);
+      const checkpoints = resolveReminderCheckpoints(item.customReminderDates, item.nextDueDate, item.actionWindowMonths);
       const dueCheckpoints = checkpoints.filter((c) => c <= now);
       const latestCheckpoint = dueCheckpoints[dueCheckpoints.length - 1];
       const alreadySent = item.lastReminderCheckpointSentAt
@@ -105,6 +105,7 @@ async function recordCompletion(complianceItem, { completedDate, completedByCont
   complianceItem.completedEvidenceUrls = evidenceUrls || [];
   // Fresh start for the next cycle's reminder checkpoints.
   complianceItem.lastReminderCheckpointSentAt = null;
+  complianceItem.customReminderDates = null;
 
   // everCompleted = true here, always - this function only ever runs for a
   // real completion, so a far-off next date correctly shows 'compliant'.

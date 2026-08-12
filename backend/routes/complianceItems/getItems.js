@@ -7,7 +7,7 @@
 // instead of a bare ObjectId.
 
 const ComplianceItem = require('../../models/ComplianceItem');
-const { computeReminderCheckpoints } = require('../../utils/dateMath');
+const { resolveReminderCheckpoints } = require('../../utils/dateMath');
 const asyncHandler = require('../../utils/asyncHandler');
 
 const getItems = asyncHandler(async (req, res) => {
@@ -18,13 +18,15 @@ const getItems = asyncHandler(async (req, res) => {
     .sort({ nextDueDate: 1 });
 
   // The frontend does zero date math of its own (see Dashboard.jsx's
-  // reminder-progress display) - reminderCheckpoints is computed here so
-  // it never has to duplicate utils/dateMath.js's logic.
+  // reminder-progress display and the calendar's reminder dots) -
+  // reminderCheckpoints is resolved here (custom override if set, else the
+  // computed default) so it never has to duplicate utils/dateMath.js's logic.
   const items = docs.map((doc) => ({
     ...doc.toObject(),
     reminderCheckpoints: doc.status === 'due'
-      ? computeReminderCheckpoints(doc.nextDueDate, doc.actionWindowMonths)
+      ? resolveReminderCheckpoints(doc.customReminderDates, doc.nextDueDate, doc.actionWindowMonths)
       : [],
+    hasCustomReminderDates: Boolean(doc.customReminderDates && doc.customReminderDates.length > 0),
   }));
 
   res.json({ items });

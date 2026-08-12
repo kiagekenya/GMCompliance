@@ -5,7 +5,7 @@ import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
 import SettingsPage from '../settings/SettingsPage';
 import {
-  getComplianceItems, completeComplianceItem, updateComplianceItem, setItemFrequency,
+  getComplianceItems, completeComplianceItem, updateComplianceItem, setItemFrequency, setReminderDates,
   listContacts, addContact, getArchive, listVendors, addVendor, runStatusCheck,
   uploadEvidence, acknowledgeReview, getEvidenceBlobUrl,
 } from '../../api/client';
@@ -42,6 +42,7 @@ const mapItemForDisplay = (item) => ({
   pendingNotes: item.pendingNotes,
   completedEvidenceUrls: item.completedEvidenceUrls || [],
   reminderCheckpoints: item.reminderCheckpoints || [],
+  hasCustomReminderDates: Boolean(item.hasCustomReminderDates),
   needsReview: Boolean(item.pendingSubmittedByAssignee) && !item.pendingReviewedAt && (item.pendingEvidenceUrls || []).length > 0,
   assignedContactId: item.assignedContactId?._id || null,
   assignedContactName: item.assignedContactId?.fullName || null,
@@ -154,6 +155,26 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
     return counts;
   }, [itemsByDay]);
 
+  // Reminder checkpoint dates (see backend/utils/dateMath.js's
+  // resolveReminderCheckpoints) plotted separately from due dates - a
+  // checkpoint is usually a different day than the actual due date, so this
+  // needs its own map rather than reusing itemsByDay.
+  const reminderDaysByDay = useMemo(() => {
+    const map = {};
+    requirements.forEach((r) => {
+      if (r.status !== 'due' || !r.reminderCheckpoints) return;
+      r.reminderCheckpoints.forEach((cpRaw) => {
+        const d = new Date(cpRaw);
+        if (d.getFullYear() === year && d.getMonth() === month) {
+          const day = d.getDate();
+          if (!map[day]) map[day] = [];
+          if (!map[day].some((x) => x.id === r.id)) map[day].push(r);
+        }
+      });
+    });
+    return map;
+  }, [requirements, year, month]);
+
   const dominantStatusByDay = useMemo(() => {
     const result = {};
     Object.keys(itemsByDay).forEach((day) => {
@@ -187,12 +208,20 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
             key={i}
             className={`mini-calendar-day ${d ? '' : 'empty'} ${isToday(d) ? 'today' : ''} ${d && dueCountByDay[d] ? 'has-due' : ''} ${d && dueCountByDay[d] ? STATUS_CLASS[dominantStatusByDay[d]] : ''}`}
             disabled={!d}
-            onClick={() => d && onDayClick(itemsByDay[d] || [])}
+            onClick={() => {
+              if (!d) return;
+              const due = itemsByDay[d] || [];
+              const reminders = reminderDaysByDay[d] || [];
+              const merged = [...due];
+              reminders.forEach((r) => { if (!merged.some((x) => x.id === r.id)) merged.push(r); });
+              onDayClick(merged);
+            }}
           >
             {d && (
               <>
                 <span>{d}</span>
                 {dueCountByDay[d] && <span className="mini-calendar-badge">{dueCountByDay[d]}</span>}
+                {reminderDaysByDay[d] && <span className="mini-calendar-reminder-dot" title="Reminder scheduled"></span>}
               </>
             )}
           </button>
@@ -203,6 +232,7 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
         <span><i className="mini-calendar-legend-dot status-due"></i>Due soon</span>
         <span><i className="mini-calendar-legend-dot status-needsreview"></i>Needs review</span>
         <span><i className="mini-calendar-legend-dot status-compliant"></i>Compliant</span>
+        <span><i className="mini-calendar-reminder-dot mini-calendar-reminder-dot--legend"></i>Reminder date</span>
       </div>
     </div>
   );
@@ -309,6 +339,11 @@ const ComplianceDashboard = ({ configData }) => {
         console.log(`[Dashboard] acknowledged review on item ${id}`);
         fetchItems();
         return; // silent - no navigation, this fires automatically on page open
+      } else if (updates.kind === 'setReminderDates') {
+        await setReminderDates(id, updates.dates);
+        console.log(`[Dashboard] set reminder dates on item ${id}`, updates.dates);
+        fetchItems();
+        return; // stay on the requirement page so the operator sees the updated schedule
       }
     } catch (err) {
       console.error('[Dashboard] handleRequirementUpdate failed:', err);
