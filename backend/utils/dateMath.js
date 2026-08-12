@@ -17,11 +17,15 @@ function addFrequencyToDate(anchorDate, frequencyValue, frequencyUnit) {
   return result;
 }
 
-// Default action window = 1/4 of the frequency period, per the requirements doc
-// ("for a 12 month-cadence requirement... at month-9" = 3 months = 12/4).
-function computeActionWindowMonths(frequencyValue, frequencyUnit) {
-  const valueInMonths = frequencyUnit === 'years' ? frequencyValue * 12 : frequencyValue;
-  return Math.round((valueInMonths / 4) * 100) / 100;
+// Fixed 3-month action window, regardless of the item's cycle length - a
+// 12-month item, a 15-month item, and a 36-month item all start their
+// "due" window (and their escalating reminders) exactly 3 months before
+// the due date, no more and no less. This intentionally does NOT scale
+// with frequency (an earlier version divided frequency by 4, which meant a
+// 15-month item got a 3.75-month window and 4 reminders instead of 3 -
+// that's the bug this fixed value corrects).
+function computeActionWindowMonths() {
+  return 3;
 }
 
 // Only call this for items NOT manually set to 'started' or 'done' - those
