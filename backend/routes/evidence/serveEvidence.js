@@ -6,37 +6,71 @@
 // or "items/<itemId>/<uuid>-x.pdf".
 //
 // This is the ONLY way evidence files are ever served - never raw static
-// file hosting. The real access control lives here: a file is only ever
-// streamed if the requesting operator actually owns a ComplianceItem
-// (pending or completed) or CompletionLog entry that references this exact
-// storedName. The folder layout at upload time is about where bytes land,
-// not about who's allowed to read them back.
+// file hosting. The real access control lives here, and now serves BOTH
+// identities in this app: an operator (owns via ComplianceItem.operatorId
+// or CompletionLog.operatorId) or a vendor-portal vendor (owns via
+// ComplianceItem.assignedVendorId matching one of their hasPortalAccess
+// Vendor records - vendors don't get CompletionLog access, that's the
+// operator's full audit archive, out of scope for a vendor). The folder
+// layout at upload time is about where bytes land, not about who's allowed
+// to read them back.
 //
 // Inline-vs-download is also decided here (see isInlineSafe) - an upload
 // submitted through the unauthenticated public link could claim any MIME
-// type, so rendering it inline in the authenticated admin's browser is
-// only allowed for a small safe allowlist; everything else forces a
-// download instead of an in-browser render.
+// type, so rendering it inline in an authenticated browser is only allowed
+// for a small safe allowlist; everything else forces a download instead of
+// an in-browser render.
 
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { requireAuth } = require('../../middleware/clerkAuth');
+const { verifyClerkToken } = require('../../middleware/clerkAuth');
 const { UPLOADS_ROOT, isInlineSafe } = require('../../utils/evidenceStorage');
+const Operator = require('../../models/Operator');
+const VendorUser = require('../../models/VendorUser');
+const Vendor = require('../../models/Vendor');
 const ComplianceItem = require('../../models/ComplianceItem');
 const CompletionLog = require('../../models/CompletionLog');
 const asyncHandler = require('../../utils/asyncHandler');
 
-router.use(requireAuth);
+// Deliberately does NOT auto-create an Operator - this route only ever
+// reads, so a brand new Clerk user with neither an Operator nor a
+// VendorUser record simply gets denied, rather than silently being
+// enrolled as an operator just for looking at a file link.
+async function resolveEvidenceIdentity(req, res, next) {
+  let claims;
+  try {
+    claims = await verifyClerkToken(req);
+  } catch (err) {
+    return res.status(err.status || 401).json({ error: err.message });
+  }
+
+  const operator = await Operator.findOne({ clerkUserId: claims.sub });
+  if (operator) {
+    req.identity = { type: 'operator', operatorId: operator._id };
+    return next();
+  }
+
+  const vendorUser = await VendorUser.findOne({ clerkUserId: claims.sub });
+  if (vendorUser) {
+    const vendorRecords = await Vendor.find({ email: vendorUser.email, hasPortalAccess: true });
+    req.identity = { type: 'vendor', vendorIds: vendorRecords.map((v) => v._id) };
+    return next();
+  }
+
+  return res.status(403).json({ error: 'No access' });
+}
+
+router.use(resolveEvidenceIdentity);
 
 router.get('/*', asyncHandler(async (req, res) => {
   const storedName = req.params[0];
   if (!storedName) return res.status(400).json({ error: 'Missing file path' });
 
-  const owns = await isOwnedByOperator(storedName, req.operatorId);
+  const owns = await isOwnedByIdentity(storedName, req.identity);
   if (!owns) {
-    console.warn(`[evidence] operator ${req.operatorId}: denied access to "${storedName}" - not found in any of their records`);
+    console.warn(`[evidence] ${req.identity.type} denied access to "${storedName}" - not found in any of their records`);
     return res.status(404).json({ error: 'File not found' });
   }
 
@@ -58,9 +92,13 @@ router.get('/*', asyncHandler(async (req, res) => {
 }));
 
 // Returns the matched evidence entry object if found (truthy), else null.
-async function isOwnedByOperator(storedName, operatorId) {
+async function isOwnedByIdentity(storedName, identity) {
+  const itemFilter = identity.type === 'operator'
+    ? { operatorId: identity.operatorId }
+    : { assignedVendorId: { $in: identity.vendorIds } };
+
   const item = await ComplianceItem.findOne({
-    operatorId,
+    ...itemFilter,
     $or: [
       { pendingEvidenceUrls: { $elemMatch: { storedName } } },
       { completedEvidenceUrls: { $elemMatch: { storedName } } },
@@ -72,10 +110,12 @@ async function isOwnedByOperator(storedName, operatorId) {
     if (found) return found;
   }
 
-  const log = await CompletionLog.findOne({ operatorId, evidenceUrls: { $elemMatch: { storedName } } });
-  if (log) {
-    const found = (log.evidenceUrls || []).find((e) => e && typeof e === 'object' && e.storedName === storedName);
-    if (found) return found;
+  if (identity.type === 'operator') {
+    const log = await CompletionLog.findOne({ operatorId: identity.operatorId, evidenceUrls: { $elemMatch: { storedName } } });
+    if (log) {
+      const found = (log.evidenceUrls || []).find((e) => e && typeof e === 'object' && e.storedName === storedName);
+      if (found) return found;
+    }
   }
 
   return null;

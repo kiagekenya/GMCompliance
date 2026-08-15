@@ -154,6 +154,7 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
         email: vendorDraft.email,
         phone: vendorDraft.phone,
         serviceScope: vendorDraft.serviceScope,
+        hasPortalAccess: Boolean(vendorDraft.hasPortalAccess),
       });
       setEditingVendorId(null);
       onVendorsChanged();
@@ -345,11 +346,11 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
         {vendorError && <p style={{ color: '#c0392b', fontSize: 13, padding: '8px 16px 0' }}>⚠ {vendorError}</p>}
         <table>
           <thead>
-            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th></th></tr>
+            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th><th></th></tr>
           </thead>
           <tbody>
             {vendorList.length === 0 ? (
-              <tr><td colSpan="6" style={{ padding: 16, opacity: 0.7 }}>No vendors yet.</td></tr>
+              <tr><td colSpan="7" style={{ padding: 16, opacity: 0.7 }}>No vendors yet.</td></tr>
             ) : vendorList.map((v) => (
               editingVendorId === v._id ? (
                 <tr key={v._id}>
@@ -358,6 +359,9 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
                   <td><input className="table-input" value={vendorDraft.email} onChange={(e) => setVendorDraft({ ...vendorDraft, email: e.target.value })} /></td>
                   <td><input className="table-input" value={vendorDraft.phone} onChange={(e) => setVendorDraft({ ...vendorDraft, phone: e.target.value })} /></td>
                   <td><input className="table-input" value={vendorDraft.serviceScope} onChange={(e) => setVendorDraft({ ...vendorDraft, serviceScope: e.target.value })} /></td>
+                  <td style={{ textAlign: 'center' }}>
+                    <input type="checkbox" checked={Boolean(vendorDraft.hasPortalAccess)} onChange={(e) => setVendorDraft({ ...vendorDraft, hasPortalAccess: e.target.checked })} />
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="action-button save" style={{ padding: '4px 8px' }} onClick={handleSaveVendor}>SAVE</button>{' '}
                     <button className="action-button cancel" style={{ padding: '4px 8px' }} onClick={cancelEditVendor}>CANCEL</button>
@@ -370,6 +374,9 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
                   <td>{v.email}</td>
                   <td>{v.phone}</td>
                   <td>{v.serviceScope}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    {v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="row-icon-btn" onClick={() => startEditVendor(v)} aria-label="Edit"><i className="fas fa-pen"></i></button>{' '}
                     <button className="row-icon-btn danger" onClick={() => handleDeleteVendor(v._id)} aria-label="Delete"><i className="fas fa-trash"></i></button>

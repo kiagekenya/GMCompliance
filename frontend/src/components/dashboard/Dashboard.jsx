@@ -257,7 +257,7 @@ const ComplianceDashboard = ({ configData }) => {
   const [testResult, setTestResult] = useState(null);
 
   const [vendorList, setVendorList] = useState(configData?.vendors || []);
-  const [newVendor, setNewVendor] = useState({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '' });
+  const [newVendor, setNewVendor] = useState({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
   const [addingVendor, setAddingVendor] = useState(false);
   const [addVendorError, setAddVendorError] = useState('');
 
@@ -417,7 +417,7 @@ const ComplianceDashboard = ({ configData }) => {
     setAddingVendor(true);
     try {
       await addVendor(newVendor);
-      setNewVendor({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '' });
+      setNewVendor({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
       fetchVendors();
     } catch (err) {
       console.error('[Dashboard] addVendor failed:', err);
@@ -776,14 +776,15 @@ const ComplianceDashboard = ({ configData }) => {
         <div className="settings-section-header"><div className="card-label">VENDOR DIRECTORY</div></div>
         <table>
           <thead>
-            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th></tr>
+            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th></tr>
           </thead>
           <tbody>
             {vendorList.length === 0 ? (
-              <tr><td colSpan="5" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
+              <tr><td colSpan="6" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
             ) : vendorList.map((v) => (
               <tr key={v._id || v.id}>
                 <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
+                <td>{v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -800,6 +801,10 @@ const ComplianceDashboard = ({ configData }) => {
           <input className="form-input" placeholder="Phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} />
           <input className="form-input" placeholder="Service scope" value={newVendor.serviceScope} onChange={(e) => setNewVendor({ ...newVendor, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
+          <input type="checkbox" checked={newVendor.hasPortalAccess} onChange={(e) => setNewVendor({ ...newVendor, hasPortalAccess: e.target.checked })} />
+          Grant portal access (lets this vendor log in and see/update tasks assigned to them)
+        </label>
         <button type="submit" className="action-button save" disabled={addingVendor}>
           {addingVendor ? 'ADDING…' : 'ADD VENDOR'}
         </button>

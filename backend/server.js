@@ -23,6 +23,13 @@ app.use(cors({
 app.use(express.json());
 app.use(requestLogger);
 
+// Registered BEFORE the /api/auth router below - that router's requireAuth
+// middleware runs (and auto-creates an Operator) for ANY sub-path under
+// /api/auth, including this one, if it gets there first. This route
+// intentionally decides identity itself (see routes/auth/identify.js) and
+// must fully handle the request before the /api/auth router ever sees it.
+app.post('/api/auth/identify', require('./routes/auth/identify'));
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/requirements', require('./routes/requirements'));
@@ -31,6 +38,7 @@ app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/public', require('./routes/public'));
 app.use('/api/evidence', require('./routes/evidence/serveEvidence'));
+app.use('/api/vendor-portal', require('./routes/vendorPortal'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

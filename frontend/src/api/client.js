@@ -67,6 +67,20 @@ async function request(path, { method = 'GET', body } = {}) {
 export const getCurrentOperator = () => request('/auth/me');
 export const updateCompany = (payload) => request('/auth/company', { method: 'PATCH', body: payload });
 export const notifySetupComplete = () => request('/auth/notify-setup-complete', { method: 'POST' });
+// intendedRole: 'operator' | 'vendor' - only used the very first time this
+// Clerk account is ever seen (see backend/routes/auth/identify.js). A
+// returning user's real stored role always wins over this.
+export const identify = (intendedRole) => request('/auth/identify', { method: 'POST', body: { intendedRole } });
+
+// --- Vendor portal (a completely separate identity from Operator) ---
+export const getVendorMe = () => request('/vendor-portal/me');
+export const getVendorTasks = () => request('/vendor-portal/tasks');
+export const updateVendorTask = (id, payload) => request(`/vendor-portal/tasks/${id}`, { method: 'PATCH', body: payload });
+export const uploadVendorEvidence = (id, files) => {
+  const formData = new FormData();
+  files.forEach((f) => formData.append('files', f));
+  return request(`/vendor-portal/tasks/${id}/evidence`, { method: 'POST', body: formData });
+};
 
 // --- Pipeline profile ---
 export const getProfile = () => request('/profile');

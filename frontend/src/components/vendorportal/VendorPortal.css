@@ -1,0 +1,330 @@
+/* VendorPortal.css
+   Reuses the same --color-* / --bg-* / --text-* / --border-color tokens
+   defined at :root in Dashboard.css (still globally loaded - Dashboard.jsx
+   is statically imported by App.js regardless of which role renders) so
+   status colors stay consistent across both sides of the product, but the
+   layout itself is its own thing - a vendor's world is a flat task list
+   across operators, not a 6-category regulatory ledger. */
+
+.vp-app {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-app, #f4f6f8);
+  color: var(--text-main, #1e293b);
+  font-family: inherit;
+}
+
+.vp-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--bg-sidebar, #101820);
+  color: var(--text-light, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1rem;
+}
+
+.vp-brand {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.vp-role-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  width: fit-content;
+}
+
+.vp-me {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vp-me-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.vp-me-email {
+  font-size: 0.75rem;
+  opacity: 0.65;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.vp-nav {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vp-nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.6rem 0.7rem;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.vp-nav a:hover {
+  background: var(--bg-sidebar-hover, #1c2733);
+}
+
+.vp-operators-list {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vp-operators-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  margin-bottom: 8px;
+}
+
+.vp-operator-chip {
+  font-size: 0.78rem;
+  padding: 5px 0;
+  opacity: 0.9;
+}
+
+.vp-user-button {
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.vp-main {
+  flex: 1;
+  padding: 2rem 2.5rem;
+  max-width: 1000px;
+}
+
+.vp-main h2 {
+  margin: 0 0 1rem;
+  font-size: 1.3rem;
+}
+
+.vp-empty-state {
+  background: var(--bg-card, #fff);
+  border: 1px dashed var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted, #64748b);
+}
+
+.vp-card {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.vp-card-header {
+  padding: 0.75rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #64748b);
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.vp-card-body {
+  padding: 1rem;
+}
+
+.vp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.vp-table th {
+  text-align: left;
+  padding: 0.6rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #64748b);
+  background: var(--bg-table-header, #eef2f5);
+}
+
+.vp-table td {
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.vp-clickable-row {
+  cursor: pointer;
+}
+.vp-clickable-row:hover {
+  background: var(--bg-table-hover, #f8fafc);
+}
+
+.vp-status-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.vp-mono {
+  font-family: monospace, monospace;
+  font-size: 0.8rem;
+}
+
+/* --- Task detail --- */
+.vp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 700px;
+}
+
+.vp-back-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.4rem 0;
+}
+.vp-back-btn:hover {
+  color: var(--text-main, #1e293b);
+}
+
+.vp-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vp-detail-status {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vp-detail-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.vp-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.vp-doc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-app, #f4f6f8);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.vp-doc-name {
+  flex: 1;
+}
+
+.vp-link-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.vp-link-btn:hover {
+  text-decoration: underline;
+}
+
+.vp-field-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  margin-bottom: 4px;
+}
+
+.vp-input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+}
+.vp-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.vp-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-accent, #2563eb);
+  color: #fff;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.vp-upload-btn:hover {
+  background: #1d4ed8;
+}
+
+.vp-primary-btn {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vp-primary-btn:hover {
+  background: #1d4ed8;
+}
+.vp-primary-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .vp-app { flex-direction: column; }
+  .vp-sidebar { width: 100%; }
+  .vp-main { padding: 1.25rem; }
+}

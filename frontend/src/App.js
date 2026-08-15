@@ -7,7 +7,14 @@ import SystemInit from './components/systeminit/SystemInit';
 import MasterLedgerInit from './components/masterledgerinit/MasterLedgerInit';
 import Dashboard from './components/dashboard/Dashboard';
 import PublicUpload from './components/publicupload/PublicUpload';
-import { getCurrentOperator, getProfile, getComplianceItems, listVendors } from './api/client';
+import VendorPortal from './components/vendorportal/VendorPortal';
+import { getCurrentOperator, getProfile, getComplianceItems, listVendors, identify } from './api/client';
+
+// Stashed the moment someone clicks a role button on the login screen (see
+// RoleChoice below), read once after Clerk auth succeeds, then cleared.
+// sessionStorage survives Clerk's own internal redirects better than plain
+// React state would.
+const ROLE_CHOICE_KEY = 'gc_login_role_choice';
 
 function AuthenticatedApp() {
   const [view, setView] = useState('checking'); // 'checking' | 'init' | 'master' | 'dashboard'
@@ -107,20 +114,95 @@ function AuthenticatedApp() {
   return <SystemInit onComplete={handleSystemInitComplete} />;
 }
 
+// Shown before Clerk's sign-in widget, for both new and returning users.
+// The choice only actually matters the first time a given Clerk account is
+// ever seen (see backend/routes/auth/identify.js) - a returning user's
+// real stored role always wins over whatever they click here, so a
+// misclick on a later visit can't reassign anyone's identity.
+function RoleChoice({ onChoose }) {
+  const choose = (role) => {
+    sessionStorage.setItem(ROLE_CHOICE_KEY, role);
+    onChoose(role);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 24, padding: 24 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Galaxy Compliance Assistant</h1>
+      <p style={{ opacity: 0.7, margin: 0, textAlign: 'center', maxWidth: 380 }}>
+        Continue as an operator managing your compliance calendar, or as a vendor completing assigned work.
+      </p>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button
+          type="button"
+          onClick={() => choose('operator')}
+          style={{ padding: '18px 28px', fontSize: 15, fontWeight: 700, borderRadius: 10, border: '1px solid #e2e8f0', background: '#1e293b', color: '#fff', cursor: 'pointer', minWidth: 200 }}
+        >
+          <i className="fas fa-building" aria-hidden="true" style={{ marginRight: 8 }}></i>
+          Continue as Operator
+        </button>
+        <button
+          type="button"
+          onClick={() => choose('vendor')}
+          style={{ padding: '18px 28px', fontSize: 15, fontWeight: 700, borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', color: '#1e293b', cursor: 'pointer', minWidth: 200 }}
+        >
+          <i className="fas fa-truck" aria-hidden="true" style={{ marginRight: 8 }}></i>
+          Continue as Vendor
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Runs once per sign-in, after Clerk auth succeeds: tells the backend which
+// role was chosen at the login screen (only used the first time this Clerk
+// account is ever seen), then renders the right app for whatever role the
+// backend actually settled on.
+function RoleRouter() {
+  const [role, setRole] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const intendedRole = sessionStorage.getItem(ROLE_CHOICE_KEY) || 'operator';
+    identify(intendedRole)
+      .then((data) => {
+        sessionStorage.removeItem(ROLE_CHOICE_KEY);
+        setRole(data.role);
+      })
+      .catch((err) => {
+        console.error('[App] identify failed:', err);
+        setError(err.message);
+      });
+  }, []);
+
+  if (error) {
+    return <div style={{ padding: 40, textAlign: 'center', color: '#c0392b' }}>⚠ {error}</div>;
+  }
+  if (!role) {
+    return <div style={{ padding: 40, textAlign: 'center' }}>Loading…</div>;
+  }
+  return role === 'vendor' ? <VendorPortal /> : <AuthenticatedApp />;
+}
+
 function GatedApp() {
+  const [roleChoiceMade, setRoleChoiceMade] = useState(() => Boolean(sessionStorage.getItem(ROLE_CHOICE_KEY)));
+
   return (
     <div className="App">
       <SignedOut>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-          <SignIn routing="virtual" />
-        </div>
+        {roleChoiceMade ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+            <SignIn routing="virtual" />
+          </div>
+        ) : (
+          <RoleChoice onChoose={() => setRoleChoiceMade(true)} />
+        )}
       </SignedOut>
 
       <SignedIn>
         <div style={{ position: 'fixed', top: 12, right: 16, zIndex: 1000 }}>
           <UserButton afterSignOutUrl="/" />
         </div>
-        <AuthenticatedApp />
+        <RoleRouter />
       </SignedIn>
     </div>
   );

@@ -20,23 +20,30 @@
 // exact same symptom.
 
 const { verifyToken } = require('@clerk/backend');
+const { fetchClerkUserProfile } = require('../utils/clerkClient');
 const Operator = require('../models/Operator');
 
-async function requireAuth(req, res, next) {
+// Shared by requireAuth, requireVendorAuth (middleware/vendorAuth.js), and
+// the /api/auth/identify route - verifies the Bearer token and returns
+// Clerk's claims, with no side effects (no DB writes, no role assumptions).
+// Throws an Error with a `.status` set (matches the app's errorHandler.js
+// convention) on any failure, so callers can just await it plainly.
+async function verifyClerkToken(req) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
   if (!token) {
-    return res.status(401).json({ error: 'Missing or malformed Authorization header' });
+    const err = new Error('Missing or malformed Authorization header');
+    err.status = 401;
+    throw err;
   }
 
   if (!process.env.CLERK_JWT_KEY) {
     console.error('[auth] CLERK_JWT_KEY is not set in .env - see middleware/clerkAuth.js comment for where to get it. Falling back to network-based verification, which is what was failing before.');
   }
 
-  let claims;
   try {
-    claims = await verifyToken(token, {
+    return await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY,
       jwtKey: process.env.CLERK_JWT_KEY, // if set, verification is fully offline - no network call
     });
@@ -45,7 +52,18 @@ async function requireAuth(req, res, next) {
     if (err.message?.includes('fetch') || err.message?.includes('JWK')) {
       console.error('[auth] This looks like a network issue reaching Clerk\'s API. Set CLERK_JWT_KEY in .env to verify offline instead (see comment at the top of this file).');
     }
-    return res.status(401).json({ error: 'Invalid or expired session token' });
+    const wrapped = new Error('Invalid or expired session token');
+    wrapped.status = 401;
+    throw wrapped;
+  }
+}
+
+async function requireAuth(req, res, next) {
+  let claims;
+  try {
+    claims = await verifyClerkToken(req);
+  } catch (err) {
+    return res.status(err.status || 401).json({ error: err.message });
   }
 
   const clerkUserId = claims.sub; // Clerk puts the user id in the standard JWT "sub" claim
@@ -54,11 +72,12 @@ async function requireAuth(req, res, next) {
   if (!operator) {
     // First time we've seen this Clerk user - create their Operator record.
     // companyName/county/location start as defaults and get filled in by
-    // SystemInit's Step 1 (see routes/auth/updateCompany.js).
-    operator = await Operator.create({
-      clerkUserId,
-      email: claims.email || '',
-    });
+    // SystemInit's Step 1 (see routes/auth/updateCompany.js). Session token
+    // claims don't reliably include email (depends on Clerk dashboard JWT
+    // template config) - fall back to the Backend API rather than silently
+    // storing an empty string (see utils/clerkClient.js).
+    const email = claims.email || (await fetchClerkUserProfile(clerkUserId)).email;
+    operator = await Operator.create({ clerkUserId, email });
     console.log(`[auth] created new Operator record for Clerk user ${clerkUserId}`);
   }
 
@@ -81,4 +100,4 @@ function requireRole(...allowedRoles) {
   };
 }
 
-module.exports = { requireAuth, requireRole };
+module.exports = { requireAuth, requireRole, verifyClerkToken };
