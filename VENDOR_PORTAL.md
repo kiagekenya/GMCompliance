@@ -61,6 +61,8 @@ Everything above this section describes the *original* vendor portal: a task inb
 
 **Per-regulation outreach.** On "FIND OPERATORS," a vendor sees each operator's actual list of compliance regulations (not just a bare operator name), and can click **"Offer to help"** on a specific one — the request that lands in the operator's inbox is tagged with that exact regulation ("RE: O&M Manual Review (49 CFR §192.605(a))"), so the operator knows exactly what's being pitched. A general inquiry (not tied to one regulation) is still available below the list for a broader pitch.
 
+**Ending a collaboration.** Every row in the operator's "VENDOR DIRECTORY" table now has two actions: **Revoke Access** (shown only when access is currently granted) immediately cuts that vendor off from this operator's data/tasks while keeping the contact on file — click ADD VENDOR on their card in "FIND VENDORS" again later to re-grant it, no duplicate created. **Remove** (trash icon) deletes the contact entirely; the backend automatically unassigns any tasks pointing at that vendor first, so nothing is left dangling.
+
 **A real landing page, not a blank one.** A vendor who hasn't been connected to any operator yet (or has no tasks assigned yet) no longer sees a bare sentence on white — "MY TASKS" shows a proper empty state with an icon, a clear explanation of what to do next, and buttons straight to "FIND OPERATORS" and their own profile.
 
 ## Where this lives in the code

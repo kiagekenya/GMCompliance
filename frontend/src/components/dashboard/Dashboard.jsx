@@ -9,6 +9,7 @@ import {
   listContacts, addContact, getArchive, listVendors, runStatusCheck,
   uploadEvidence, acknowledgeReview, getEvidenceBlobUrl,
   getVendorDirectory, getOperatorRequests, respondToOperatorRequest, addVendorFromDirectory,
+  updateVendor, deleteVendor,
 } from '../../api/client';
 
 // 'pending' is the honest default for a never-completed item.
@@ -309,9 +310,11 @@ const AddContactForm = ({ onSubmit, existingCount }) => {
 // directory data) so it isn't remounted every time ComplianceDashboard
 // re-renders for an unrelated reason - see AddContactForm/AddVendorForm
 // above for why that pattern matters here.
-const VendorDirectoryTable = ({ vendorList }) => {
+const VendorDirectoryTable = ({ vendorList, onVendorsChanged }) => {
   const [profiles, setProfiles] = useState([]);
   const [viewingEmail, setViewingEmail] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     getVendorDirectory()
@@ -323,17 +326,54 @@ const VendorDirectoryTable = ({ vendorList }) => {
   profiles.forEach((p) => { if (p.vendorUserId?.email) profileByEmail[p.vendorUserId.email] = p; });
   const viewing = viewingEmail ? profileByEmail[viewingEmail] : null;
 
+  // "Revoke" cuts the vendor's portal access (they stop seeing this
+  // operator's data / tasks) but keeps the contact entry around, so it can
+  // be re-granted later from FindVendorsSection without losing history.
+  // "Remove" deletes the contact entirely - deleteVendor.js on the backend
+  // already unassigns any tasks pointing at it so nothing dangles.
+  const handleRevoke = async (id) => {
+    setActionError('');
+    setBusyId(id);
+    try {
+      await updateVendor(id, { hasPortalAccess: false });
+      onVendorsChanged();
+    } catch (err) {
+      console.error('[VendorDirectoryTable] revoke failed:', err);
+      setActionError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRemove = async (id, companyName) => {
+    if (!window.confirm(`Remove ${companyName} from your vendor list? Any tasks assigned to them will be unassigned. This can't be undone - you can add them again from Find Vendors later.`)) {
+      return;
+    }
+    setActionError('');
+    setBusyId(id);
+    try {
+      await deleteVendor(id);
+      onVendorsChanged();
+    } catch (err) {
+      console.error('[VendorDirectoryTable] remove failed:', err);
+      setActionError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <>
       <div className="settings-section-header"><div className="card-label">VENDOR DIRECTORY</div></div>
+      {actionError && <p style={{ color: '#c0392b', fontSize: 13, padding: '0 4px' }}>⚠ {actionError}</p>}
       <div className="ledger-scroll" style={{ height: 'auto' }}>
         <table>
           <thead>
-            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th><th></th></tr>
+            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th><th></th><th></th></tr>
           </thead>
           <tbody>
             {vendorList.length === 0 ? (
-              <tr><td colSpan="7" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
+              <tr><td colSpan="8" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one from Find Vendors below.</td></tr>
             ) : vendorList.map((v) => (
               <tr key={v._id || v.id}>
                 <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
@@ -344,6 +384,16 @@ const VendorDirectoryTable = ({ vendorList }) => {
                   ) : (
                     <span style={{ opacity: 0.4, fontSize: 12 }}>No profile set up</span>
                   )}
+                </td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  {v.hasPortalAccess && (
+                    <button type="button" className="row-icon-btn" disabled={busyId === v._id} onClick={() => handleRevoke(v._id)} title="Stop this vendor from seeing your data - keeps the contact on file">
+                      {busyId === v._id ? '…' : 'Revoke Access'}
+                    </button>
+                  )}{' '}
+                  <button type="button" className="row-icon-btn danger" disabled={busyId === v._id} onClick={() => handleRemove(v._id, v.companyName)} aria-label="Remove vendor" title="Remove this vendor entirely">
+                    <i className="fas fa-trash"></i>
+                  </button>
                 </td>
               </tr>
             ))}
@@ -425,7 +475,11 @@ const FindVendorsSection = ({ vendorList, onVendorAdded }) => {
       .finally(() => setLoading(false));
   }, []);
 
-  const addedEmails = new Set(vendorList.map((v) => v.email));
+  // Only vendors with CURRENTLY granted access count as "already added" -
+  // one revoked via VendorDirectoryTable's "Revoke Access" falls back to
+  // showing the ADD VENDOR button here, which re-grants access (the backend
+  // updates the existing contact rather than duplicating it either way).
+  const addedEmails = new Set(vendorList.filter((v) => v.hasPortalAccess).map((v) => v.email));
 
   return (
     <>
@@ -1011,7 +1065,7 @@ const ComplianceDashboard = ({ configData }) => {
   const VendorsPage = () => (
     <>
       <h2>Vendors</h2>
-      <VendorDirectoryTable vendorList={vendorList} />
+      <VendorDirectoryTable vendorList={vendorList} onVendorsChanged={fetchVendors} />
 
       <div style={{ marginTop: 24 }}>
         <FindVendorsSection vendorList={vendorList} onVendorAdded={fetchVendors} />

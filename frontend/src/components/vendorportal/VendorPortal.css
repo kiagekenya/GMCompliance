@@ -191,6 +191,71 @@
   margin-bottom: 1rem;
 }
 
+/* The collapsed operator row on "FIND OPERATORS" - name + stat pills as one
+   clickable button, expanding to the full regulation table on click. */
+.vp-operator-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.vp-operator-toggle:hover {
+  background: var(--bg-table-hover, #f8fafc);
+}
+
+.vp-operator-toggle-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vp-operator-toggle-name {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.vp-operator-toggle-county {
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+
+.vp-operator-toggle-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vp-stat-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--bg-table-header, #eef2f5);
+  color: var(--text-muted, #64748b);
+}
+
+.vp-stat-pill--pastdue {
+  background: rgba(162, 62, 42, 0.12);
+  color: var(--color-pastdue, #a23e2a);
+}
+
+.vp-stat-pill--due {
+  background: rgba(201, 138, 30, 0.14);
+  color: var(--color-due, #c98a1e);
+}
+
 .vp-card-header {
   padding: 0.75rem 1rem;
   font-size: 0.7rem;

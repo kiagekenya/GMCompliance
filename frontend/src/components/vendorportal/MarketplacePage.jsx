@@ -112,6 +112,58 @@ const GeneralRequestButton = ({ operatorId }) => {
   );
 };
 
+// A collapsed-by-default operator row: name + basic stats as a clickable
+// button, expanding to the full regulation table only when opened - keeps a
+// long operator list scannable instead of dumping every table at once.
+const OperatorCard = ({ op }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const pastDueCount = op.items.filter((it) => it.status === 'past_due').length;
+  const dueCount = op.items.filter((it) => it.status === 'due').length;
+
+  return (
+    <div className="vp-card">
+      <button type="button" className="vp-operator-toggle" onClick={() => setExpanded((v) => !v)}>
+        <span className="vp-operator-toggle-main">
+          <span className="vp-operator-toggle-name">{op.companyName}</span>
+          {op.county && <span className="vp-operator-toggle-county">{op.county}</span>}
+        </span>
+        <span className="vp-operator-toggle-stats">
+          <span className="vp-stat-pill">{op.items.length} regulation{op.items.length === 1 ? '' : 's'}</span>
+          {pastDueCount > 0 && <span className="vp-stat-pill vp-stat-pill--pastdue">{pastDueCount} past due</span>}
+          {dueCount > 0 && <span className="vp-stat-pill vp-stat-pill--due">{dueCount} due soon</span>}
+          <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`} aria-hidden="true"></i>
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="vp-card-body">
+          {op.items.length === 0 ? (
+            <p style={{ fontSize: 13, opacity: 0.7, margin: '0 0 12px' }}>No compliance items on file yet.</p>
+          ) : (
+            <table className="vp-table" style={{ marginBottom: 12 }}>
+              <thead><tr><th></th><th>Regulation</th><th>Citation</th><th>Due</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                {op.items.map((it) => (
+                  <tr key={it.complianceItemId}>
+                    <td><span className="vp-status-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.pending }}></span></td>
+                    <td>{it.title}</td>
+                    <td className="vp-mono">{it.sourceRegulation}</td>
+                    <td>{formatDate(it.nextDueDate)}</td>
+                    <td>{STATUS_LABEL[it.status] || it.status}</td>
+                    <td><RequestRowButton operatorId={op.operatorId} complianceItemId={it.complianceItemId} itemLabel={`${it.title} (${it.sourceRegulation})`} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <GeneralRequestButton operatorId={op.operatorId} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MarketplacePage = () => {
   const [operators, setOperators] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,33 +188,7 @@ const MarketplacePage = () => {
       {!loading && !error && operators.length === 0 && (
         <div className="vp-empty-state"><p>No operators found.</p></div>
       )}
-      {operators.map((op) => (
-        <div key={op.operatorId} className="vp-card">
-          <div className="vp-card-header">{op.companyName}{op.county ? ` · ${op.county}` : ''}</div>
-          <div className="vp-card-body">
-            {op.items.length === 0 ? (
-              <p style={{ fontSize: 13, opacity: 0.7, margin: '0 0 12px' }}>No compliance items on file yet.</p>
-            ) : (
-              <table className="vp-table" style={{ marginBottom: 12 }}>
-                <thead><tr><th></th><th>Regulation</th><th>Citation</th><th>Due</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                  {op.items.map((it) => (
-                    <tr key={it.complianceItemId}>
-                      <td><span className="vp-status-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.pending }}></span></td>
-                      <td>{it.title}</td>
-                      <td className="vp-mono">{it.sourceRegulation}</td>
-                      <td>{formatDate(it.nextDueDate)}</td>
-                      <td>{STATUS_LABEL[it.status] || it.status}</td>
-                      <td><RequestRowButton operatorId={op.operatorId} complianceItemId={it.complianceItemId} itemLabel={`${it.title} (${it.sourceRegulation})`} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            <GeneralRequestButton operatorId={op.operatorId} />
-          </div>
-        </div>
-      ))}
+      {operators.map((op) => <OperatorCard key={op.operatorId} op={op} />)}
     </>
   );
 };
