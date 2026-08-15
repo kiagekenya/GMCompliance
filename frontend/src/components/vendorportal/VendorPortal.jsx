@@ -116,15 +116,33 @@ const VendorPortal = () => {
     <>
       <h2>Your Assigned Tasks</h2>
       {me && me.operators.length === 0 && (
-        <div className="vp-empty-state">
-          <p>No operator has granted you portal access yet.</p>
-          <p style={{ fontSize: 13, opacity: 0.75 }}>
-            Once an operator adds you as a vendor and grants portal access with this email ({me.email}), your assigned tasks will show up here.
-          </p>
+        <div className="vp-hero-empty">
+          <div className="vp-hero-icon"><i className="fas fa-compass" aria-hidden="true"></i></div>
+          <h3>You're set up - now let's get you found</h3>
+          <p>No operator has connected with you yet. Browse operators on the platform, see their compliance regulations, and offer to help with the ones that fit what you do.</p>
+          <div className="vp-hero-actions">
+            <button type="button" className="vp-primary-btn" onClick={() => navigate('/vendor/marketplace')}>
+              <i className="fas fa-magnifying-glass" aria-hidden="true"></i> FIND OPERATORS
+            </button>
+            <button type="button" className="vp-link-btn" onClick={() => navigate('/vendor/profile')}>Review your profile</button>
+          </div>
+          <p className="vp-hero-hint">Operators can also find and add you directly from your profile - using {me.email}.</p>
         </div>
       )}
       {me && me.operators.length > 0 && tasks.length === 0 && (
-        <div className="vp-empty-state"><p>Nothing assigned to you yet.</p></div>
+        <div className="vp-hero-empty">
+          <div className="vp-hero-icon"><i className="fas fa-clipboard-check" aria-hidden="true"></i></div>
+          <h3>Nothing assigned yet</h3>
+          <p>
+            You're connected with {me.operators.length} operator{me.operators.length === 1 ? '' : 's'}, but nothing's been assigned to you yet.
+            Check back soon, or keep browsing for more work in the meantime.
+          </p>
+          <div className="vp-hero-actions">
+            <button type="button" className="vp-primary-btn" onClick={() => navigate('/vendor/marketplace')}>
+              <i className="fas fa-magnifying-glass" aria-hidden="true"></i> FIND MORE OPERATORS
+            </button>
+          </div>
+        </div>
       )}
       {Object.keys(tasksByOperator).map((company) => (
         <div key={company} className="vp-card" style={{ marginBottom: 16 }}>

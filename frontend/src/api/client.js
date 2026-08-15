@@ -97,6 +97,9 @@ export const respondToVendorRequest = (id, status) => request(`/vendor-portal/re
 // --- Vendor marketplace: operator side (browsing vendor profiles, and the
 // connection-request inbox - mirrors the vendor-side functions above) ---
 export const getVendorDirectory = () => request('/vendor-directory');
+// Adds a real, self-registered vendor straight to this operator's vendor
+// list, pulling their info from their own VendorProfile - no manual retyping.
+export const addVendorFromDirectory = (vendorUserId) => request(`/vendor-directory/${vendorUserId}/add`, { method: 'POST' });
 export const getServiceCategories = () => request('/requirements/categories');
 export const getOperatorRequests = () => request('/vendor-directory/requests');
 export const sendOperatorRequest = (vendorUserId, message) => request('/vendor-directory/requests', { method: 'POST', body: { vendorUserId, message } });

@@ -6,9 +6,9 @@ import RequirementDetail from '../requirementdetail/RequirementDetail';
 import SettingsPage from '../settings/SettingsPage';
 import {
   getComplianceItems, completeComplianceItem, updateComplianceItem, setItemFrequency, setReminderDates,
-  listContacts, addContact, getArchive, listVendors, addVendor, runStatusCheck,
+  listContacts, addContact, getArchive, listVendors, runStatusCheck,
   uploadEvidence, acknowledgeReview, getEvidenceBlobUrl,
-  getVendorDirectory, getOperatorRequests, sendOperatorRequest, respondToOperatorRequest,
+  getVendorDirectory, getOperatorRequests, respondToOperatorRequest, addVendorFromDirectory,
 } from '../../api/client';
 
 // 'pending' is the honest default for a never-completed item.
@@ -297,51 +297,10 @@ const AddContactForm = ({ onSubmit, existingCount }) => {
   );
 };
 
-const AddVendorForm = ({ onSubmit }) => {
-  const [form, setForm] = useState({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    if (!form.companyName) {
-      setError('Company name is required.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await onSubmit(form);
-      setForm({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
-    } catch (err) {
-      console.error('[AddVendorForm] submit failed:', err);
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
-      <div className="card-label" style={{ marginBottom: 10 }}>ADD VENDOR</div>
-      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-        <input className="form-input" placeholder="Company name" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
-        <input className="form-input" placeholder="Contact person" value={form.personnelName} onChange={(e) => setForm({ ...form, personnelName: e.target.value })} />
-        <input className="form-input" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input className="form-input" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        <input className="form-input" placeholder="Service scope" value={form.serviceScope} onChange={(e) => setForm({ ...form, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
-      </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
-        <input type="checkbox" checked={form.hasPortalAccess} onChange={(e) => setForm({ ...form, hasPortalAccess: e.target.checked })} />
-        Grant portal access (lets this vendor log in and see/update tasks assigned to them)
-      </label>
-      <button type="submit" className="action-button save" disabled={submitting}>
-        {submitting ? 'ADDING…' : 'ADD VENDOR'}
-      </button>
-    </form>
-  );
-};
+// AddVendorForm (manual typed vendor entry) has been removed - vendors are
+// now added by picking a real, self-registered profile from
+// FindVendorsSection below, which auto-fills their info instead of an
+// operator retyping a second, possibly-inconsistent copy of it.
 
 // Operator's read-only vendor contact table, extended with a "View Profile"
 // link when the vendor at that email has set up their own VendorProfile
@@ -413,48 +372,48 @@ const VendorDirectoryTable = ({ vendorList }) => {
   );
 };
 
-// Send a connection request to a vendor from the operator side ("we need
-// vendor A/B/C for our services") - mirrors the vendor portal's own
-// RequestButton (MarketplacePage.jsx). Own local state, top-level, so
-// typing a message doesn't remount when a sibling section re-fetches.
-const SendVendorRequestButton = ({ vendorUserId }) => {
-  const [open, setOpen] = useState(false);
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
+// Adds a real, self-registered vendor straight to this operator's list -
+// the ONE way an operator adds a vendor now (see FindVendorsSection below).
+// Already-added vendors (cross-referenced by email against vendorList) show
+// a plain confirmation instead of a button, so it's never ambiguous whether
+// clicking again would duplicate anything.
+const AddVendorButton = ({ vendorUserId, alreadyAdded, onAdded }) => {
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
 
-  const handleSend = async () => {
-    setSending(true);
+  const handleAdd = async () => {
+    setAdding(true);
     setError('');
     try {
-      await sendOperatorRequest(vendorUserId, message);
-      setSent(true);
-      setOpen(false);
+      await addVendorFromDirectory(vendorUserId);
+      setJustAdded(true);
+      if (onAdded) onAdded();
     } catch (err) {
       setError(err.message);
     } finally {
-      setSending(false);
+      setAdding(false);
     }
   };
 
-  if (sent) return <span style={{ fontSize: 12, fontWeight: 700, color: '#3f6b52' }}>✓ Request sent</span>;
-  if (!open) return <button type="button" className="action-button save" onClick={() => setOpen(true)}>SEND REQUEST</button>;
+  if (alreadyAdded || justAdded) {
+    return <span style={{ fontSize: 12, fontWeight: 700, color: '#3f6b52' }}>✓ Added to your vendors</span>;
+  }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 380 }}>
-      {error && <p style={{ color: '#c0392b', fontSize: 12, margin: 0 }}>{error}</p>}
-      <textarea className="form-input" rows={2} placeholder="We need this vendor for our cathodic protection testing..." value={message} onChange={(e) => setMessage(e.target.value)} />
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" className="action-button save" onClick={handleSend} disabled={sending}>{sending ? 'SENDING…' : 'SEND'}</button>
-        <button type="button" className="row-icon-btn" onClick={() => setOpen(false)}>Cancel</button>
-      </div>
+    <div>
+      {error && <p style={{ color: '#c0392b', fontSize: 12, margin: '0 0 6px' }}>{error}</p>}
+      <button type="button" className="action-button save" onClick={handleAdd} disabled={adding}>
+        {adding ? 'ADDING…' : 'ADD VENDOR'}
+      </button>
     </div>
   );
 };
 
 // The operator's browse view of every vendor's self-reported profile - the
-// mirror of the vendor portal's "FIND OPERATORS" (MarketplacePage.jsx).
-const FindVendorsSection = () => {
+// mirror of the vendor portal's "FIND OPERATORS" (MarketplacePage.jsx), and
+// now the ONLY way to add a vendor: pick a real profile and click Add,
+// instead of retyping a second, possibly-inconsistent copy of their info.
+const FindVendorsSection = ({ vendorList, onVendorAdded }) => {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -466,9 +425,14 @@ const FindVendorsSection = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  const addedEmails = new Set(vendorList.map((v) => v.email));
+
   return (
     <>
       <div className="settings-section-header"><div className="card-label">FIND VENDORS</div></div>
+      <p style={{ fontSize: 13, opacity: 0.7, margin: '8px 0 12px' }}>
+        Every vendor registered on the platform. Click a name to add them straight to your vendor list - no retyping their info.
+      </p>
       {loading && <p style={{ opacity: 0.7, fontSize: 13 }}>Loading…</p>}
       {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
       {!loading && !error && profiles.length === 0 && <p style={{ opacity: 0.7, fontSize: 13 }}>No vendors have set up a profile yet.</p>}
@@ -476,13 +440,17 @@ const FindVendorsSection = () => {
         <div key={p._id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', padding: 16, marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
             <div>
-              <strong>{p.companyName}</strong>
+              <strong style={{ fontSize: 15 }}>{p.companyName}</strong>
               {p.description && <p style={{ fontSize: 13, opacity: 0.8, margin: '4px 0' }}>{p.description}</p>}
               <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>
                 {(p.serviceCategories || []).join(', ') || 'No services listed'}{p.serviceArea ? ` · ${p.serviceArea}` : ''}
               </p>
             </div>
-            <SendVendorRequestButton vendorUserId={p.vendorUserId?._id} />
+            <AddVendorButton
+              vendorUserId={p.vendorUserId?._id}
+              alreadyAdded={addedEmails.has(p.vendorUserId?.email)}
+              onAdded={onVendorAdded}
+            />
           </div>
         </div>
       ))}
@@ -524,11 +492,12 @@ const ConnectionRequestRow = ({ request, onRespond }) => {
   );
 };
 
-// The operator's connection-request inbox - vendor-initiated requests this
-// operator can accept/decline, and operator-initiated requests still
-// waiting on a vendor. Accepting either direction (see
-// backend/utils/connectionRequests.js) grants hasPortalAccess automatically,
-// the same outcome as manually adding/editing a vendor below.
+// Requests vendors have sent THIS operator, pitching a specific regulation
+// (see MarketplacePage.jsx's "Offer to help" on the vendor side) - the only
+// direction left now that adding a vendor is a direct one-click action
+// above, not a request/response handshake. Accepting (see
+// backend/utils/connectionRequests.js) grants portal access automatically,
+// same outcome as clicking ADD VENDOR above.
 const ConnectionRequestsSection = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -537,7 +506,7 @@ const ConnectionRequestsSection = () => {
   const fetchRequests = () => {
     setLoading(true);
     getOperatorRequests()
-      .then((data) => { setRequests(data.requests || []); setError(''); })
+      .then((data) => { setRequests((data.requests || []).filter((r) => r.initiatedBy === 'vendor')); setError(''); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
@@ -549,24 +518,16 @@ const ConnectionRequestsSection = () => {
     fetchRequests();
   };
 
-  const received = requests.filter((r) => r.initiatedBy === 'vendor');
-  const sent = requests.filter((r) => r.initiatedBy === 'operator');
-
   return (
     <>
-      <div className="settings-section-header"><div className="card-label">CONNECTION REQUESTS</div></div>
+      <div className="settings-section-header"><div className="card-label">REQUESTS FROM VENDORS</div></div>
+      <p style={{ fontSize: 13, opacity: 0.7, margin: '8px 0 12px' }}>
+        Vendors offering to help with one of your specific regulations. Accepting adds them to your vendor list automatically.
+      </p>
       {loading && <p style={{ opacity: 0.7, fontSize: 13 }}>Loading…</p>}
       {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
-      {!loading && !error && (
-        <>
-          <p style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6 }}>RECEIVED FROM VENDORS</p>
-          {received.length === 0 && <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing yet.</p>}
-          {received.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
-          <p style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, margin: '16px 0 6px' }}>SENT TO VENDORS</p>
-          {sent.length === 0 && <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing sent yet - see Find Vendors above.</p>}
-          {sent.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
-        </>
-      )}
+      {!loading && !error && requests.length === 0 && <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing yet.</p>}
+      {requests.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
     </>
   );
 };
@@ -716,11 +677,6 @@ const ComplianceDashboard = ({ configData }) => {
   const submitNewContact = async (contactData) => {
     await addContact(contactData);
     fetchContacts();
-  };
-
-  const submitNewVendor = async (vendorData) => {
-    await addVendor(vendorData);
-    fetchVendors();
   };
 
   const handleTestNotifications = async () => {
@@ -1057,10 +1013,8 @@ const ComplianceDashboard = ({ configData }) => {
       <h2>Vendors</h2>
       <VendorDirectoryTable vendorList={vendorList} />
 
-      <AddVendorForm onSubmit={submitNewVendor} />
-
       <div style={{ marginTop: 24 }}>
-        <FindVendorsSection />
+        <FindVendorsSection vendorList={vendorList} onVendorAdded={fetchVendors} />
       </div>
 
       <div style={{ marginTop: 24 }}>

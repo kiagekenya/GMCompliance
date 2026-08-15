@@ -129,6 +129,60 @@
   color: var(--text-muted, #64748b);
 }
 
+/* A real landing moment instead of a bare sentence on white - shown when a
+   vendor has no operator connections yet, or nothing assigned yet. */
+.vp-hero-empty {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 14px;
+  padding: 3rem 2rem;
+  text-align: center;
+  max-width: 520px;
+  margin: 1rem auto 0;
+}
+
+.vp-hero-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 1.1rem;
+  border-radius: 50%;
+  background: var(--color-accent, #2563eb);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.vp-hero-empty h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.vp-hero-empty p {
+  margin: 0 auto;
+  font-size: 0.88rem;
+  color: var(--text-muted, #64748b);
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+.vp-hero-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin-top: 1.4rem;
+  flex-wrap: wrap;
+}
+
+.vp-hero-hint {
+  margin-top: 1.2rem !important;
+  font-size: 0.75rem !important;
+  opacity: 0.6;
+}
+
 .vp-card {
   background: var(--bg-card, #fff);
   border: 1px solid var(--border-color, #e2e8f0);

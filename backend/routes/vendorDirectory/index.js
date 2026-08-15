@@ -9,11 +9,13 @@ const router = express.Router();
 const { requireAuth } = require('../../middleware/clerkAuth');
 
 const listVendorDirectory = require('./list');
+const addVendorFromDirectory = require('./addVendor');
 const { listRequests, createRequest, respondToRequest } = require('./requests');
 
 router.use(requireAuth);
 
 router.get('/', listVendorDirectory);
+router.post('/:vendorUserId/add', addVendorFromDirectory);
 router.get('/requests', listRequests);
 router.post('/requests', createRequest);
 router.patch('/requests/:id', respondToRequest);
