@@ -22,6 +22,7 @@ const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-U
 const RequestRow = ({ request, isReceived, onRespond }) => {
   const [responding, setResponding] = useState(false);
   const companyName = request.operatorId?.companyName || 'Unknown operator';
+  const regulation = request.complianceItemId?.requirementId;
 
   const respond = async (status) => {
     setResponding(true);
@@ -38,6 +39,11 @@ const RequestRow = ({ request, isReceived, onRespond }) => {
         <strong style={{ fontSize: 13 }}>{companyName}</strong>
         <span style={{ fontSize: 11, fontWeight: 700, color: STATUS_COLOR[request.status] }}>{STATUS_LABEL[request.status]}</span>
       </div>
+      {regulation && (
+        <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.7 }}>
+          RE: {regulation.title} <span className="vp-mono" style={{ fontSize: 10 }}>({regulation.sourceRegulation})</span>
+        </span>
+      )}
       {request.message && <p style={{ fontSize: 13, margin: 0, opacity: 0.85 }}>{request.message}</p>}
       <span style={{ fontSize: 11, opacity: 0.6 }}>{formatDate(request.createdAt)}</span>
       {isReceived && request.status === 'pending' && (

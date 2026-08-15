@@ -89,7 +89,9 @@ export const saveVendorProfile = (payload) => request('/vendor-portal/profile', 
 export const getVendorServiceCategories = () => request('/vendor-portal/service-categories');
 export const getMarketplaceOperators = () => request('/vendor-portal/operators');
 export const getVendorRequests = () => request('/vendor-portal/requests');
-export const sendVendorRequest = (operatorId, message) => request('/vendor-portal/requests', { method: 'POST', body: { operatorId, message } });
+// complianceItemId is optional - set it to pitch a SPECIFIC regulation
+// ("we can do this one for you") instead of a general inquiry.
+export const sendVendorRequest = (operatorId, message, complianceItemId) => request('/vendor-portal/requests', { method: 'POST', body: { operatorId, message, complianceItemId } });
 export const respondToVendorRequest = (id, status) => request(`/vendor-portal/requests/${id}`, { method: 'PATCH', body: { status } });
 
 // --- Vendor marketplace: operator side (browsing vendor profiles, and the

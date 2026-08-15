@@ -13,6 +13,7 @@ const { acceptConnectionRequest } = require('../../utils/connectionRequests');
 const listRequests = asyncHandler(async (req, res) => {
   const requests = await ConnectionRequest.find({ operatorId: req.operatorId })
     .populate('vendorUserId', 'email fullName')
+    .populate({ path: 'complianceItemId', select: 'requirementId', populate: { path: 'requirementId', select: 'title sourceRegulation categoryName' } })
     .sort({ createdAt: -1 });
   res.json({ requests });
 });

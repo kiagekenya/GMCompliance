@@ -14,6 +14,11 @@ const mongoose = require('mongoose');
 const connectionRequestSchema = new mongoose.Schema({
   vendorUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'VendorUser', required: true },
   operatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Operator', required: true },
+  // Optional - lets a vendor-initiated request point at the specific
+  // ComplianceItem they're offering to help with ("we can do THIS for
+  // you"), instead of only a generic pitch at the operator. Null for a
+  // general inquiry not tied to one regulation.
+  complianceItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'ComplianceItem', default: null },
   initiatedBy: { type: String, enum: ['vendor', 'operator'], required: true },
   message: { type: String, default: '' },
   status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },

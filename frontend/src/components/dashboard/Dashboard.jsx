@@ -367,31 +367,33 @@ const VendorDirectoryTable = ({ vendorList }) => {
   return (
     <>
       <div className="settings-section-header"><div className="card-label">VENDOR DIRECTORY</div></div>
-      <table>
-        <thead>
-          <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th><th></th></tr>
-        </thead>
-        <tbody>
-          {vendorList.length === 0 ? (
-            <tr><td colSpan="7" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
-          ) : vendorList.map((v) => (
-            <tr key={v._id || v.id}>
-              <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
-              <td>{v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}</td>
-              <td>
-                {profileByEmail[v.email] ? (
-                  <button type="button" className="row-icon-btn" onClick={() => setViewingEmail(v.email)}>View Profile</button>
-                ) : (
-                  <span style={{ opacity: 0.4, fontSize: 12 }}>No profile set up</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="ledger-scroll" style={{ height: 'auto' }}>
+        <table>
+          <thead>
+            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th><th></th></tr>
+          </thead>
+          <tbody>
+            {vendorList.length === 0 ? (
+              <tr><td colSpan="7" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
+            ) : vendorList.map((v) => (
+              <tr key={v._id || v.id}>
+                <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
+                <td>{v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}</td>
+                <td>
+                  {profileByEmail[v.email] ? (
+                    <button type="button" className="row-icon-btn" onClick={() => setViewingEmail(v.email)}>View Profile</button>
+                  ) : (
+                    <span style={{ opacity: 0.4, fontSize: 12 }}>No profile set up</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {viewing && (
-        <div className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16, border: '1px solid #e2e8f0', borderRadius: 8 }}>
+        <div style={{ padding: 16, marginTop: 16, border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div className="card-label">{viewing.companyName}</div>
             <button type="button" className="row-icon-btn" onClick={() => setViewingEmail(null)}>Close</button>
@@ -471,7 +473,7 @@ const FindVendorsSection = () => {
       {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
       {!loading && !error && profiles.length === 0 && <p style={{ opacity: 0.7, fontSize: 13 }}>No vendors have set up a profile yet.</p>}
       {profiles.map((p) => (
-        <div key={p._id} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginBottom: 12 }}>
+        <div key={p._id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', padding: 16, marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
             <div>
               <strong>{p.companyName}</strong>
@@ -493,6 +495,7 @@ const FindVendorsSection = () => {
 const ConnectionRequestRow = ({ request, onRespond }) => {
   const [responding, setResponding] = useState(false);
   const vendorLabel = request.vendorUserId?.fullName || request.vendorUserId?.email || 'Unknown vendor';
+  const regulation = request.complianceItemId?.requirementId;
 
   const respond = async (status) => {
     setResponding(true);
@@ -500,11 +503,16 @@ const ConnectionRequestRow = ({ request, onRespond }) => {
   };
 
   return (
-    <div className="ledger-scroll" style={{ height: 'auto', padding: 12, marginBottom: 8 }}>
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', padding: 12, marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong style={{ fontSize: 13 }}>{vendorLabel}</strong>
         <span style={{ fontSize: 11, fontWeight: 700 }}>{request.status.toUpperCase()}</span>
       </div>
+      {regulation && (
+        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, margin: '4px 0 0' }}>
+          RE: {regulation.title} <span style={{ fontFamily: 'monospace', fontSize: 10 }}>({regulation.sourceRegulation})</span>
+        </div>
+      )}
       {request.message && <p style={{ fontSize: 13, margin: '4px 0' }}>{request.message}</p>}
       {request.initiatedBy === 'vendor' && request.status === 'pending' && (
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
@@ -1047,17 +1055,15 @@ const ComplianceDashboard = ({ configData }) => {
   const VendorsPage = () => (
     <>
       <h2>Vendors</h2>
-      <div className="ledger-scroll" style={{ height: 'auto' }}>
-        <VendorDirectoryTable vendorList={vendorList} />
-      </div>
+      <VendorDirectoryTable vendorList={vendorList} />
 
       <AddVendorForm onSubmit={submitNewVendor} />
 
-      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 24 }}>
+      <div style={{ marginTop: 24 }}>
         <FindVendorsSection />
       </div>
 
-      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 24 }}>
+      <div style={{ marginTop: 24 }}>
         <ConnectionRequestsSection />
       </div>
     </>

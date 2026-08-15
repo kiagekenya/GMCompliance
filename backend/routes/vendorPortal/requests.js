@@ -8,18 +8,20 @@
 
 const ConnectionRequest = require('../../models/ConnectionRequest');
 const Operator = require('../../models/Operator');
+const ComplianceItem = require('../../models/ComplianceItem');
 const asyncHandler = require('../../utils/asyncHandler');
 const { acceptConnectionRequest } = require('../../utils/connectionRequests');
 
 const listRequests = asyncHandler(async (req, res) => {
   const requests = await ConnectionRequest.find({ vendorUserId: req.vendorUser._id })
     .populate('operatorId', 'companyName county location')
+    .populate({ path: 'complianceItemId', select: 'requirementId', populate: { path: 'requirementId', select: 'title sourceRegulation categoryName' } })
     .sort({ createdAt: -1 });
   res.json({ requests });
 });
 
 const createRequest = asyncHandler(async (req, res) => {
-  const { operatorId, message } = req.body;
+  const { operatorId, message, complianceItemId } = req.body;
   if (!operatorId) {
     return res.status(422).json({ error: 'operatorId is required' });
   }
@@ -27,10 +29,19 @@ const createRequest = asyncHandler(async (req, res) => {
   if (!operator) {
     return res.status(404).json({ error: 'Operator not found' });
   }
+  // A referenced item, if any, must actually belong to this operator -
+  // otherwise a vendor could tag an unrelated operator's regulation.
+  if (complianceItemId) {
+    const item = await ComplianceItem.findOne({ _id: complianceItemId, operatorId });
+    if (!item) {
+      return res.status(422).json({ error: 'That regulation does not belong to this operator' });
+    }
+  }
 
   const request = await ConnectionRequest.create({
     vendorUserId: req.vendorUser._id,
     operatorId,
+    complianceItemId: complianceItemId || null,
     initiatedBy: 'vendor',
     message: message || '',
   });
