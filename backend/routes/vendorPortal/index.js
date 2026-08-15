@@ -12,6 +12,11 @@ const getMe = require('./getMe');
 const getTasks = require('./getTasks');
 const updateTask = require('./updateTask');
 const uploadEvidence = require('./uploadEvidence');
+const getProfile = require('./getProfile');
+const saveProfile = require('./saveProfile');
+const getServiceCategories = require('./getServiceCategories');
+const getOperators = require('./getOperators');
+const { listRequests, createRequest, respondToRequest } = require('./requests');
 
 const taskUpload = createUploadMiddleware((req) => `items/${req.params.id}`);
 
@@ -21,5 +26,15 @@ router.get('/me', getMe);
 router.get('/tasks', getTasks);
 router.patch('/tasks/:id', updateTask);
 router.post('/tasks/:id/evidence', taskUpload.array('files'), uploadEvidence);
+
+// Marketplace: the vendor's own profile, the operator list with compliance
+// gaps, and the two-way connection-request inbox. See VENDOR_PORTAL.md.
+router.get('/profile', getProfile);
+router.put('/profile', saveProfile);
+router.get('/service-categories', getServiceCategories);
+router.get('/operators', getOperators);
+router.get('/requests', listRequests);
+router.post('/requests', createRequest);
+router.patch('/requests/:id', respondToRequest);
 
 module.exports = router;

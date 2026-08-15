@@ -8,6 +8,7 @@ import {
   getComplianceItems, completeComplianceItem, updateComplianceItem, setItemFrequency, setReminderDates,
   listContacts, addContact, getArchive, listVendors, addVendor, runStatusCheck,
   uploadEvidence, acknowledgeReview, getEvidenceBlobUrl,
+  getVendorDirectory, getOperatorRequests, sendOperatorRequest, respondToOperatorRequest,
 } from '../../api/client';
 
 // 'pending' is the honest default for a never-completed item.
@@ -238,6 +239,330 @@ const MonthCalendar = ({ requirements, onDayClick }) => {
   );
 };
 
+// Both of these are real, stable top-level components with their OWN local
+// form state - NOT defined inside ComplianceDashboard like the page
+// components below. That distinction matters: a component defined inside
+// another component's render body gets a brand-new function identity every
+// time the parent re-renders, so React treats it as a completely different
+// component type and remounts it - which meant every single keystroke in
+// these forms lost focus, since the <input> itself was being torn down and
+// recreated on every character. Keeping the form state local here instead
+// of in ComplianceDashboard means typing only re-renders this small
+// component, not the whole dashboard.
+const AddContactForm = ({ onSubmit, existingCount }) => {
+  const [form, setForm] = useState({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.fullName || !form.email || !form.phone) {
+      setError('Name, email, and phone are all required.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        fullName: form.fullName,
+        title: form.title,
+        email: form.email,
+        phone: form.phone,
+        escalationLevel: Number(form.escalationLevel) || existingCount + 1,
+      });
+      setForm({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
+    } catch (err) {
+      console.error('[AddContactForm] submit failed:', err);
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
+      <div className="card-label" style={{ marginBottom: 10 }}>ADD CONTACT</div>
+      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+        <input className="form-input" placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+        <input className="form-input" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <input className="form-input" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <input className="form-input" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        <input className="form-input" placeholder="Escalation level (1 = notified first)" type="number" min="1" value={form.escalationLevel} onChange={(e) => setForm({ ...form, escalationLevel: e.target.value })} />
+      </div>
+      <button type="submit" className="action-button save" disabled={submitting}>
+        {submitting ? 'ADDING…' : 'ADD CONTACT'}
+      </button>
+    </form>
+  );
+};
+
+const AddVendorForm = ({ onSubmit }) => {
+  const [form, setForm] = useState({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.companyName) {
+      setError('Company name is required.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onSubmit(form);
+      setForm({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
+    } catch (err) {
+      console.error('[AddVendorForm] submit failed:', err);
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
+      <div className="card-label" style={{ marginBottom: 10 }}>ADD VENDOR</div>
+      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+        <input className="form-input" placeholder="Company name" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
+        <input className="form-input" placeholder="Contact person" value={form.personnelName} onChange={(e) => setForm({ ...form, personnelName: e.target.value })} />
+        <input className="form-input" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <input className="form-input" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        <input className="form-input" placeholder="Service scope" value={form.serviceScope} onChange={(e) => setForm({ ...form, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
+        <input type="checkbox" checked={form.hasPortalAccess} onChange={(e) => setForm({ ...form, hasPortalAccess: e.target.checked })} />
+        Grant portal access (lets this vendor log in and see/update tasks assigned to them)
+      </label>
+      <button type="submit" className="action-button save" disabled={submitting}>
+        {submitting ? 'ADDING…' : 'ADD VENDOR'}
+      </button>
+    </form>
+  );
+};
+
+// Operator's read-only vendor contact table, extended with a "View Profile"
+// link when the vendor at that email has set up their own VendorProfile
+// (marketplace/self-reported info - see backend/models/VendorProfile.js and
+// VENDOR_PORTAL.md). Self-contained top-level component (fetches its own
+// directory data) so it isn't remounted every time ComplianceDashboard
+// re-renders for an unrelated reason - see AddContactForm/AddVendorForm
+// above for why that pattern matters here.
+const VendorDirectoryTable = ({ vendorList }) => {
+  const [profiles, setProfiles] = useState([]);
+  const [viewingEmail, setViewingEmail] = useState(null);
+
+  useEffect(() => {
+    getVendorDirectory()
+      .then((data) => setProfiles(data.profiles || []))
+      .catch((err) => console.error('[VendorDirectoryTable] failed to load profiles:', err.message));
+  }, []);
+
+  const profileByEmail = {};
+  profiles.forEach((p) => { if (p.vendorUserId?.email) profileByEmail[p.vendorUserId.email] = p; });
+  const viewing = viewingEmail ? profileByEmail[viewingEmail] : null;
+
+  return (
+    <>
+      <div className="settings-section-header"><div className="card-label">VENDOR DIRECTORY</div></div>
+      <table>
+        <thead>
+          <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th><th></th></tr>
+        </thead>
+        <tbody>
+          {vendorList.length === 0 ? (
+            <tr><td colSpan="7" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
+          ) : vendorList.map((v) => (
+            <tr key={v._id || v.id}>
+              <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
+              <td>{v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}</td>
+              <td>
+                {profileByEmail[v.email] ? (
+                  <button type="button" className="row-icon-btn" onClick={() => setViewingEmail(v.email)}>View Profile</button>
+                ) : (
+                  <span style={{ opacity: 0.4, fontSize: 12 }}>No profile set up</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {viewing && (
+        <div className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16, border: '1px solid #e2e8f0', borderRadius: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div className="card-label">{viewing.companyName}</div>
+            <button type="button" className="row-icon-btn" onClick={() => setViewingEmail(null)}>Close</button>
+          </div>
+          {viewing.description && <p style={{ fontSize: 13, marginBottom: 10 }}>{viewing.description}</p>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
+            <div><strong>Phone:</strong> {viewing.phone || '—'}</div>
+            <div><strong>Website:</strong> {viewing.website || '—'}</div>
+            <div><strong>Service area:</strong> {viewing.serviceArea || '—'}</div>
+            <div><strong>Years in business:</strong> {viewing.yearsInBusiness ?? '—'}</div>
+            <div style={{ gridColumn: '1 / -1' }}><strong>Certifications:</strong> {viewing.certifications || '—'}</div>
+            <div style={{ gridColumn: '1 / -1' }}><strong>Services offered:</strong> {(viewing.serviceCategories || []).join(', ') || '—'}</div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+// Send a connection request to a vendor from the operator side ("we need
+// vendor A/B/C for our services") - mirrors the vendor portal's own
+// RequestButton (MarketplacePage.jsx). Own local state, top-level, so
+// typing a message doesn't remount when a sibling section re-fetches.
+const SendVendorRequestButton = ({ vendorUserId }) => {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+
+  const handleSend = async () => {
+    setSending(true);
+    setError('');
+    try {
+      await sendOperatorRequest(vendorUserId, message);
+      setSent(true);
+      setOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (sent) return <span style={{ fontSize: 12, fontWeight: 700, color: '#3f6b52' }}>✓ Request sent</span>;
+  if (!open) return <button type="button" className="action-button save" onClick={() => setOpen(true)}>SEND REQUEST</button>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 380 }}>
+      {error && <p style={{ color: '#c0392b', fontSize: 12, margin: 0 }}>{error}</p>}
+      <textarea className="form-input" rows={2} placeholder="We need this vendor for our cathodic protection testing..." value={message} onChange={(e) => setMessage(e.target.value)} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" className="action-button save" onClick={handleSend} disabled={sending}>{sending ? 'SENDING…' : 'SEND'}</button>
+        <button type="button" className="row-icon-btn" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
+// The operator's browse view of every vendor's self-reported profile - the
+// mirror of the vendor portal's "FIND OPERATORS" (MarketplacePage.jsx).
+const FindVendorsSection = () => {
+  const [profiles, setProfiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getVendorDirectory()
+      .then((data) => { setProfiles(data.profiles || []); setError(''); })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <>
+      <div className="settings-section-header"><div className="card-label">FIND VENDORS</div></div>
+      {loading && <p style={{ opacity: 0.7, fontSize: 13 }}>Loading…</p>}
+      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
+      {!loading && !error && profiles.length === 0 && <p style={{ opacity: 0.7, fontSize: 13 }}>No vendors have set up a profile yet.</p>}
+      {profiles.map((p) => (
+        <div key={p._id} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <strong>{p.companyName}</strong>
+              {p.description && <p style={{ fontSize: 13, opacity: 0.8, margin: '4px 0' }}>{p.description}</p>}
+              <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>
+                {(p.serviceCategories || []).join(', ') || 'No services listed'}{p.serviceArea ? ` · ${p.serviceArea}` : ''}
+              </p>
+            </div>
+            <SendVendorRequestButton vendorUserId={p.vendorUserId?._id} />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+};
+
+// One row in the connection-request inbox - shared shape for both "received
+// from vendors" (respondable) and "sent to vendors" (waiting) sections.
+const ConnectionRequestRow = ({ request, onRespond }) => {
+  const [responding, setResponding] = useState(false);
+  const vendorLabel = request.vendorUserId?.fullName || request.vendorUserId?.email || 'Unknown vendor';
+
+  const respond = async (status) => {
+    setResponding(true);
+    try { await onRespond(request._id, status); } finally { setResponding(false); }
+  };
+
+  return (
+    <div className="ledger-scroll" style={{ height: 'auto', padding: 12, marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <strong style={{ fontSize: 13 }}>{vendorLabel}</strong>
+        <span style={{ fontSize: 11, fontWeight: 700 }}>{request.status.toUpperCase()}</span>
+      </div>
+      {request.message && <p style={{ fontSize: 13, margin: '4px 0' }}>{request.message}</p>}
+      {request.initiatedBy === 'vendor' && request.status === 'pending' && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          <button type="button" className="action-button save" onClick={() => respond('accepted')} disabled={responding}>ACCEPT</button>
+          <button type="button" className="row-icon-btn" onClick={() => respond('declined')} disabled={responding}>Decline</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// The operator's connection-request inbox - vendor-initiated requests this
+// operator can accept/decline, and operator-initiated requests still
+// waiting on a vendor. Accepting either direction (see
+// backend/utils/connectionRequests.js) grants hasPortalAccess automatically,
+// the same outcome as manually adding/editing a vendor below.
+const ConnectionRequestsSection = () => {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const fetchRequests = () => {
+    setLoading(true);
+    getOperatorRequests()
+      .then((data) => { setRequests(data.requests || []); setError(''); })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchRequests(); }, []);
+
+  const handleRespond = async (id, status) => {
+    await respondToOperatorRequest(id, status);
+    fetchRequests();
+  };
+
+  const received = requests.filter((r) => r.initiatedBy === 'vendor');
+  const sent = requests.filter((r) => r.initiatedBy === 'operator');
+
+  return (
+    <>
+      <div className="settings-section-header"><div className="card-label">CONNECTION REQUESTS</div></div>
+      {loading && <p style={{ opacity: 0.7, fontSize: 13 }}>Loading…</p>}
+      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
+      {!loading && !error && (
+        <>
+          <p style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6 }}>RECEIVED FROM VENDORS</p>
+          {received.length === 0 && <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing yet.</p>}
+          {received.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
+          <p style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, margin: '16px 0 6px' }}>SENT TO VENDORS</p>
+          {sent.length === 0 && <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing sent yet - see Find Vendors above.</p>}
+          {sent.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
+        </>
+      )}
+    </>
+  );
+};
+
 const ComplianceDashboard = ({ configData }) => {
   const navigate = useNavigate();
   const [requirements, setRequirements] = useState([]);
@@ -249,17 +574,11 @@ const ComplianceDashboard = ({ configData }) => {
   const [contacts, setContacts] = useState([]);
   const [archiveEntries, setArchiveEntries] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
-  const [newContact, setNewContact] = useState({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
-  const [addingContact, setAddingContact] = useState(false);
-  const [addContactError, setAddContactError] = useState('');
   const [expandedContactId, setExpandedContactId] = useState(null);
   const [testingNotifications, setTestingNotifications] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
   const [vendorList, setVendorList] = useState(configData?.vendors || []);
-  const [newVendor, setNewVendor] = useState({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
-  const [addingVendor, setAddingVendor] = useState(false);
-  const [addVendorError, setAddVendorError] = useState('');
 
   const fetchItems = () => {
     setLoading(true);
@@ -381,50 +700,19 @@ const ComplianceDashboard = ({ configData }) => {
     }
   };
 
-  const handleSubmitNewContact = async (e) => {
-    e.preventDefault();
-    setAddContactError('');
-    if (!newContact.fullName || !newContact.email || !newContact.phone) {
-      setAddContactError('Name, email, and phone are all required.');
-      return;
-    }
-    setAddingContact(true);
-    try {
-      await addContact({
-        fullName: newContact.fullName,
-        title: newContact.title,
-        email: newContact.email,
-        phone: newContact.phone,
-        escalationLevel: Number(newContact.escalationLevel) || contacts.length + 1,
-      });
-      setNewContact({ fullName: '', title: '', email: '', phone: '', escalationLevel: '' });
-      fetchContacts();
-    } catch (err) {
-      console.error('[Dashboard] addContact failed:', err);
-      setAddContactError(err.message);
-    } finally {
-      setAddingContact(false);
-    }
+  // Deliberately do NOT catch here - AddContactForm/AddVendorForm (real
+  // stable top-level components, see above) catch it themselves to show
+  // their own inline error, since this function's caller is that form's
+  // own submit handler now, not a raw <form onSubmit> living in this
+  // component.
+  const submitNewContact = async (contactData) => {
+    await addContact(contactData);
+    fetchContacts();
   };
 
-  const handleSubmitNewVendor = async (e) => {
-    e.preventDefault();
-    setAddVendorError('');
-    if (!newVendor.companyName) {
-      setAddVendorError('Company name is required.');
-      return;
-    }
-    setAddingVendor(true);
-    try {
-      await addVendor(newVendor);
-      setNewVendor({ companyName: '', personnelName: '', email: '', phone: '', serviceScope: '', hasPortalAccess: false });
-      fetchVendors();
-    } catch (err) {
-      console.error('[Dashboard] addVendor failed:', err);
-      setAddVendorError(err.message);
-    } finally {
-      setAddingVendor(false);
-    }
+  const submitNewVendor = async (vendorData) => {
+    await addVendor(vendorData);
+    fetchVendors();
   };
 
   const handleTestNotifications = async () => {
@@ -752,20 +1040,7 @@ const ComplianceDashboard = ({ configData }) => {
         </table>
       </div>
 
-      <form onSubmit={handleSubmitNewContact} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
-        <div className="card-label" style={{ marginBottom: 10 }}>ADD CONTACT</div>
-        {addContactError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addContactError}</p>}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-          <input className="form-input" placeholder="Full name" value={newContact.fullName} onChange={(e) => setNewContact({ ...newContact, fullName: e.target.value })} />
-          <input className="form-input" placeholder="Title" value={newContact.title} onChange={(e) => setNewContact({ ...newContact, title: e.target.value })} />
-          <input className="form-input" placeholder="Email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
-          <input className="form-input" placeholder="Phone" value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} />
-          <input className="form-input" placeholder="Escalation level (1 = notified first)" type="number" min="1" value={newContact.escalationLevel} onChange={(e) => setNewContact({ ...newContact, escalationLevel: e.target.value })} />
-        </div>
-        <button type="submit" className="action-button save" disabled={addingContact}>
-          {addingContact ? 'ADDING…' : 'ADD CONTACT'}
-        </button>
-      </form>
+      <AddContactForm onSubmit={submitNewContact} existingCount={contacts.length} />
     </>
   );
 
@@ -773,42 +1048,18 @@ const ComplianceDashboard = ({ configData }) => {
     <>
       <h2>Vendors</h2>
       <div className="ledger-scroll" style={{ height: 'auto' }}>
-        <div className="settings-section-header"><div className="card-label">VENDOR DIRECTORY</div></div>
-        <table>
-          <thead>
-            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th></tr>
-          </thead>
-          <tbody>
-            {vendorList.length === 0 ? (
-              <tr><td colSpan="6" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one below.</td></tr>
-            ) : vendorList.map((v) => (
-              <tr key={v._id || v.id}>
-                <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
-                <td>{v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <VendorDirectoryTable vendorList={vendorList} />
       </div>
 
-      <form onSubmit={handleSubmitNewVendor} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
-        <div className="card-label" style={{ marginBottom: 10 }}>ADD VENDOR</div>
-        {addVendorError && <p style={{ color: '#c0392b', fontSize: 13 }}>{addVendorError}</p>}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-          <input className="form-input" placeholder="Company name" value={newVendor.companyName} onChange={(e) => setNewVendor({ ...newVendor, companyName: e.target.value })} />
-          <input className="form-input" placeholder="Contact person" value={newVendor.personnelName} onChange={(e) => setNewVendor({ ...newVendor, personnelName: e.target.value })} />
-          <input className="form-input" placeholder="Email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} />
-          <input className="form-input" placeholder="Phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} />
-          <input className="form-input" placeholder="Service scope" value={newVendor.serviceScope} onChange={(e) => setNewVendor({ ...newVendor, serviceScope: e.target.value })} style={{ gridColumn: '1 / -1' }} />
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
-          <input type="checkbox" checked={newVendor.hasPortalAccess} onChange={(e) => setNewVendor({ ...newVendor, hasPortalAccess: e.target.checked })} />
-          Grant portal access (lets this vendor log in and see/update tasks assigned to them)
-        </label>
-        <button type="submit" className="action-button save" disabled={addingVendor}>
-          {addingVendor ? 'ADDING…' : 'ADD VENDOR'}
-        </button>
-      </form>
+      <AddVendorForm onSubmit={submitNewVendor} />
+
+      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 24 }}>
+        <FindVendorsSection />
+      </div>
+
+      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 24 }}>
+        <ConnectionRequestsSection />
+      </div>
     </>
   );
 

@@ -17,7 +17,10 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import './VendorPortal.css';
-import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, getEvidenceBlobUrl } from '../../api/client';
+import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, getEvidenceBlobUrl, getVendorProfile, saveVendorProfile } from '../../api/client';
+import VendorOnboarding from './VendorOnboarding';
+import MarketplacePage from './MarketplacePage';
+import RequestsPage from './RequestsPage';
 
 const evidenceLabel = (entry) => (typeof entry === 'string' ? entry : entry.originalName);
 const evidenceKey = (entry, idx) => (typeof entry === 'string' ? entry : entry.storedName || idx);
@@ -47,15 +50,17 @@ const VendorPortal = () => {
   const navigate = useNavigate();
   const [me, setMe] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [profile, setProfile] = useState(undefined); // undefined = not loaded yet, null = no profile set up
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const fetchAll = () => {
     setLoading(true);
-    Promise.all([getVendorMe(), getVendorTasks()])
-      .then(([meData, tasksData]) => {
+    Promise.all([getVendorMe(), getVendorTasks(), getVendorProfile()])
+      .then(([meData, tasksData, profileData]) => {
         setMe(meData);
         setTasks(tasksData.tasks || []);
+        setProfile(profileData.profile);
         setError('');
       })
       .catch((err) => {
@@ -77,6 +82,28 @@ const VendorPortal = () => {
     fetchAll();
     return updated;
   };
+
+  const handleSaveProfile = async (payload) => {
+    await saveVendorProfile(payload);
+    fetchAll();
+  };
+
+  // A brand-new vendor has no VendorProfile yet - show the setup wizard
+  // full-screen instead of an empty task list ("don't land on an empty
+  // page"). Once saved, fetchAll() re-resolves profile and this falls away.
+  if (!loading && !error && profile === null) {
+    return (
+      <div className="vp-app">
+        <main className="vp-main" style={{ margin: '0 auto', maxWidth: 640 }}>
+          <h2>Welcome - set up your company profile</h2>
+          <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8, marginBottom: 16 }}>
+            This is what operators see when they view your profile, and what shows up when you browse operators to pitch your services. Takes a minute.
+          </p>
+          <VendorOnboarding profile={null} onSave={handleSaveProfile} submitLabel="GET STARTED" />
+        </main>
+      </div>
+    );
+  }
 
   const tasksByOperator = {};
   tasks.forEach((t) => {
@@ -132,6 +159,16 @@ const VendorPortal = () => {
     return <VendorTaskDetail task={task} onBack={() => navigate('/vendor')} onUpdate={handleUpdateTask} onUploadEvidence={handleUploadEvidence} />;
   };
 
+  const ProfilePage = () => (
+    <>
+      <h2>My Profile</h2>
+      <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8, marginBottom: 16 }}>
+        Operators see this when they view your profile in their Vendors directory.
+      </p>
+      <VendorOnboarding profile={profile} onSave={handleSaveProfile} submitLabel="SAVE CHANGES" />
+    </>
+  );
+
   return (
     <div className="vp-app">
       <aside className="vp-sidebar">
@@ -146,6 +183,15 @@ const VendorPortal = () => {
         <nav className="vp-nav">
           <a href="/vendor" onClick={(e) => { e.preventDefault(); navigate('/vendor'); }}>
             <i className="fas fa-list-check" aria-hidden="true"></i><span>MY TASKS</span>
+          </a>
+          <a href="/vendor/profile" onClick={(e) => { e.preventDefault(); navigate('/vendor/profile'); }}>
+            <i className="fas fa-id-card" aria-hidden="true"></i><span>MY PROFILE</span>
+          </a>
+          <a href="/vendor/marketplace" onClick={(e) => { e.preventDefault(); navigate('/vendor/marketplace'); }}>
+            <i className="fas fa-magnifying-glass" aria-hidden="true"></i><span>FIND OPERATORS</span>
+          </a>
+          <a href="/vendor/requests" onClick={(e) => { e.preventDefault(); navigate('/vendor/requests'); }}>
+            <i className="fas fa-handshake" aria-hidden="true"></i><span>REQUESTS</span>
           </a>
         </nav>
         {me && me.operators.length > 0 && (
@@ -164,6 +210,9 @@ const VendorPortal = () => {
           <Routes>
             <Route path="/vendor" element={<TaskListPage />} />
             <Route path="/vendor/task/:id" element={<TaskDetailPage />} />
+            <Route path="/vendor/profile" element={<ProfilePage />} />
+            <Route path="/vendor/marketplace" element={<MarketplacePage />} />
+            <Route path="/vendor/requests" element={<RequestsPage />} />
           </Routes>
         )}
       </main>

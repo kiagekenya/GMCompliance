@@ -82,6 +82,24 @@ export const uploadVendorEvidence = (id, files) => {
   return request(`/vendor-portal/tasks/${id}/evidence`, { method: 'POST', body: formData });
 };
 
+// --- Vendor marketplace: vendor side (self-reported profile, browsing
+// operators' compliance gaps, and the connection-request inbox) ---
+export const getVendorProfile = () => request('/vendor-portal/profile');
+export const saveVendorProfile = (payload) => request('/vendor-portal/profile', { method: 'PUT', body: payload });
+export const getVendorServiceCategories = () => request('/vendor-portal/service-categories');
+export const getMarketplaceOperators = () => request('/vendor-portal/operators');
+export const getVendorRequests = () => request('/vendor-portal/requests');
+export const sendVendorRequest = (operatorId, message) => request('/vendor-portal/requests', { method: 'POST', body: { operatorId, message } });
+export const respondToVendorRequest = (id, status) => request(`/vendor-portal/requests/${id}`, { method: 'PATCH', body: { status } });
+
+// --- Vendor marketplace: operator side (browsing vendor profiles, and the
+// connection-request inbox - mirrors the vendor-side functions above) ---
+export const getVendorDirectory = () => request('/vendor-directory');
+export const getServiceCategories = () => request('/requirements/categories');
+export const getOperatorRequests = () => request('/vendor-directory/requests');
+export const sendOperatorRequest = (vendorUserId, message) => request('/vendor-directory/requests', { method: 'POST', body: { vendorUserId, message } });
+export const respondToOperatorRequest = (id, status) => request(`/vendor-directory/requests/${id}`, { method: 'PATCH', body: { status } });
+
 // --- Pipeline profile ---
 export const getProfile = () => request('/profile');
 export const saveProfile = (payload) => request('/profile', { method: 'POST', body: payload });
