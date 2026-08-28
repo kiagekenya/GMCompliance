@@ -21,6 +21,7 @@ import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, ge
 import VendorOnboarding from './VendorOnboarding';
 import MarketplacePage from './MarketplacePage';
 import RequestsPage from './RequestsPage';
+import CompanyLogo from "../../assets/gm_edited-removebg-preview.jpg";
 
 const evidenceLabel = (entry) => (typeof entry === 'string' ? entry : entry.originalName);
 const evidenceKey = (entry, idx) => (typeof entry === 'string' ? entry : entry.storedName || idx);
@@ -53,6 +54,7 @@ const VendorPortal = () => {
   const [profile, setProfile] = useState(undefined); // undefined = not loaded yet, null = no profile set up
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const fetchAll = () => {
     setLoading(true);
@@ -76,6 +78,28 @@ const VendorPortal = () => {
     await updateVendorTask(id, payload);
     fetchAll();
   };
+
+
+  // Every sidebar link routes through this so the mobile drawer always
+  // closes after a tap, instead of leaving it open over the new page.
+  const goTo = (path) => {
+    setMobileNavOpen(false);
+    navigate(path);
+  };
+
+  if (!loading && !error && profile === null) {
+    return (
+      <div className="vp-app">
+        <main className="vp-main" style={{ margin: '0 auto', maxWidth: 640 }}>
+          <h2>Welcome - set up your company profile</h2>
+          <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8, marginBottom: 16 }}>
+            This is what operators see when they view your profile, and what shows up when you browse operators to pitch your services. Takes a minute.
+          </p>
+          <VendorOnboarding profile={null} onSave={handleSaveProfile} submitLabel="GET STARTED" />
+        </main>
+      </div>
+    );
+  }
 
   const handleUploadEvidence = async (id, files) => {
     const updated = await uploadVendorEvidence(id, files);
@@ -189,8 +213,33 @@ const VendorPortal = () => {
 
   return (
     <div className="vp-app">
-      <aside className="vp-sidebar">
-        <div className="vp-brand">Galaxy Compliance</div>
+      {/* Mobile-only top bar: logo left, hamburger right. Hidden on desktop via CSS. */}
+      <div className="vp-mobile-topbar">
+  <img src={CompanyLogo} alt="Galaxy Midstream" className="company-logo" />
+  <button
+    type="button"
+    className={`vp-hamburger-btn${mobileNavOpen ? ' is-open' : ''}`}
+    onClick={() => setMobileNavOpen((v) => !v)}
+    aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+    aria-expanded={mobileNavOpen}
+  >
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+  <div aria-hidden="true"></div>
+</div>
+
+      {/* Dims the page behind the drawer; tapping it closes the menu */}
+      <div
+        className={`vp-mobile-overlay${mobileNavOpen ? ' is-open' : ''}`}
+        onClick={() => setMobileNavOpen(false)}
+      ></div>
+
+      <aside className={`vp-sidebar${mobileNavOpen ? ' is-open' : ''}`}>
+        <div className="brand">
+          <img src={CompanyLogo} alt="Galaxy Midstream" className="company-logo" />
+        </div>
         <div className="vp-role-badge">VENDOR PORTAL</div>
         {me && (
           <div className="vp-me">
@@ -199,17 +248,17 @@ const VendorPortal = () => {
           </div>
         )}
         <nav className="vp-nav">
-          <a href="/vendor" onClick={(e) => { e.preventDefault(); navigate('/vendor'); }}>
+          <a href="/vendor" onClick={(e) => { e.preventDefault(); goTo('/vendor'); }}>
             <i className="fas fa-list-check" aria-hidden="true"></i><span>MY TASKS</span>
           </a>
-          <a href="/vendor/profile" onClick={(e) => { e.preventDefault(); navigate('/vendor/profile'); }}>
-            <i className="fas fa-id-card" aria-hidden="true"></i><span>MY PROFILE</span>
-          </a>
-          <a href="/vendor/marketplace" onClick={(e) => { e.preventDefault(); navigate('/vendor/marketplace'); }}>
+          <a href="/vendor/marketplace" onClick={(e) => { e.preventDefault(); goTo('/vendor/marketplace'); }}>
             <i className="fas fa-magnifying-glass" aria-hidden="true"></i><span>FIND OPERATORS</span>
           </a>
-          <a href="/vendor/requests" onClick={(e) => { e.preventDefault(); navigate('/vendor/requests'); }}>
+          <a href="/vendor/requests" onClick={(e) => { e.preventDefault(); goTo('/vendor/requests'); }}>
             <i className="fas fa-handshake" aria-hidden="true"></i><span>REQUESTS</span>
+          </a>
+          <a href="/vendor/profile" onClick={(e) => { e.preventDefault(); goTo('/vendor/profile'); }}>
+            <i className="fas fa-id-card" aria-hidden="true"></i><span>MY PROFILE</span>
           </a>
         </nav>
         {me && me.operators.length > 0 && (
@@ -291,75 +340,543 @@ const VendorTaskDetail = ({ task, onBack, onUpdate, onUploadEvidence }) => {
   };
 
   return (
-    <div className="vp-detail">
-      <button className="vp-back-btn" onClick={onBack}><i className="fas fa-arrow-left"></i> BACK TO TASKS</button>
+  <div
+    style={{
+      maxWidth: '820px',
+      margin: '0 auto',
+    }}
+  >
+    {/* Back button */}
+    <button
+      type="button"
+      onClick={onBack}
+      style={{
+        background: 'none',
+        border: 'none',
+        color: '#6b7280',
+        fontSize: '12px',
+        fontWeight: 500,
+        cursor: 'pointer',
+        padding: '6px 12px 6px 0',
+        marginBottom: '16px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        transition: 'color 0.15s ease',
+        borderRadius: '4px',
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.color = '#2c3e50';
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.color = '#6b7280';
+      }}
+    >
+      <span style={{ fontSize: '14px' }}>←</span> BACK TO TASKS
+    </button>
 
-      <div className="vp-detail-header">
-        <span className="vp-mono">{task.requirementId?.sourceRegulation}</span>
-        <span className="vp-detail-status" style={{ color: STATUS_COLOR[task.status] || STATUS_COLOR.pending }}>
-          {STATUS_LABEL[task.status] || task.status}
+    {/* Header with regulation and status */}
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '6px',
+        flexWrap: 'wrap',
+        gap: '8px',
+      }}
+    >
+      <span
+        style={{
+          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          fontSize: '13px',
+          fontWeight: 500,
+          color: '#6b7280',
+          background: '#f0f2f5',
+          padding: '3px 12px',
+          borderRadius: '4px',
+        }}
+      >
+        {task.requirementId?.sourceRegulation}
+      </span>
+      <span
+        style={{
+          fontSize: '12px',
+          fontWeight: 600,
+          color: STATUS_COLOR[task.status] || STATUS_COLOR.pending,
+          textTransform: 'capitalize',
+          background:
+            task.status === 'past_due'
+              ? '#fef6f6'
+              : task.status === 'due'
+              ? '#fef9e7'
+              : task.status === 'compliant'
+              ? '#edf7f2'
+              : '#f0f2f5',
+          padding: '4px 14px',
+          borderRadius: '12px',
+          letterSpacing: '0.3px',
+        }}
+      >
+        {STATUS_LABEL[task.status] || task.status}
+      </span>
+    </div>
+
+    {/* Title and metadata */}
+    <h1
+      style={{
+        fontSize: '22px',
+        fontWeight: 600,
+        color: '#1a2634',
+        margin: '4px 0 4px 0',
+        lineHeight: '1.3',
+      }}
+    >
+      {task.requirementId?.title}
+    </h1>
+    <p
+      style={{
+        color: '#6b7280',
+        fontSize: '13px',
+        margin: '0 0 16px 0',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+      }}
+    >
+      <span style={{ fontWeight: 500 }}>{task.operatorCompanyName}</span>
+      <span style={{ color: '#dce1e8' }}>·</span>
+      <span>Due {formatDate(task.nextDueDate)}</span>
+    </p>
+
+    {/* Error message */}
+    {error && (
+      <div
+        style={{
+          backgroundColor: '#fef6f6',
+          borderRadius: '8px',
+          padding: '10px 14px',
+          border: '1px solid #fad2d2',
+          color: '#b91c1c',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '16px',
+        }}
+      >
+        <span>⚠️</span> {error}
+      </div>
+    )}
+
+    {/* Evidence section */}
+    <div
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #eef2f6',
+        overflow: 'hidden',
+        marginBottom: '16px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
+      }}
+    >
+      <div
+        style={{
+          padding: '12px 20px',
+          backgroundColor: '#f8fafc',
+          borderBottom: '1px solid #eef2f6',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+        }}
+      >
+        <div
+          style={{
+            width: '3px',
+            height: '18px',
+            backgroundColor: '#2c3e50',
+            borderRadius: '4px',
+          }}
+        />
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: '#1a2634',
+            letterSpacing: '0.3px',
+          }}
+        >
+          EVIDENCE
         </span>
       </div>
-      <h1 className="vp-detail-title">{task.requirementId?.title}</h1>
-      <p style={{ opacity: 0.7, fontSize: 13 }}>{task.operatorCompanyName} · Due {formatDate(task.nextDueDate)}</p>
+      <div
+        style={{
+          padding: '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        {/* Upload button */}
+        <label
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 18px',
+            backgroundColor: '#f8fafc',
+            border: '2px dashed #dce1e8',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: 500,
+            color: '#2c3e50',
+            cursor: uploading ? 'default' : 'pointer',
+            opacity: uploading ? 0.6 : 1,
+            pointerEvents: uploading ? 'none' : 'auto',
+            transition: 'background 0.15s ease, border-color 0.15s ease',
+            width: 'fit-content',
+          }}
+          onMouseEnter={(e) => {
+            if (!uploading) {
+              e.target.style.background = '#f0f2f5';
+              e.target.style.borderColor = '#bcc3cd';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!uploading) {
+              e.target.style.background = '#f8fafc';
+              e.target.style.borderColor = '#dce1e8';
+            }
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>📤</span>
+          {uploading ? 'UPLOADING…' : 'ATTACH EVIDENCE (select one or more)'}
+          <input
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+            disabled={uploading}
+          />
+        </label>
 
-      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>⚠ {error}</p>}
-
-      <div className="vp-card">
-        <div className="vp-card-header">EVIDENCE</div>
-        <div className="vp-card-body">
-          <label className="vp-upload-btn" style={{ opacity: uploading ? 0.6 : 1, pointerEvents: uploading ? 'none' : 'auto' }}>
-            <i className="fas fa-cloud-upload-alt"></i>
-            {uploading ? 'UPLOADING…' : 'ATTACH EVIDENCE (select one or more)'}
-            <input type="file" multiple style={{ display: 'none' }} onChange={handleFileSelect} disabled={uploading} />
-          </label>
-
-          {(task.pendingEvidenceUrls || []).length > 0 && (
-            <div className="vp-doc-list">
-              {task.pendingEvidenceUrls.map((entry, idx) => (
-                <div key={evidenceKey(entry, idx)} className="vp-doc-item">
-                  <i className="fas fa-paperclip"></i>
-                  <span className="vp-doc-name">{evidenceLabel(entry)}</span>
-                  {isViewable(entry) && (
-                    <button type="button" className="vp-link-btn" onClick={() => handleViewEvidence(entry)} disabled={viewingKey === evidenceKey(entry, idx)}>
-                      {viewingKey === evidenceKey(entry, idx) ? 'opening…' : 'VIEW'}
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {(task.pendingEvidenceUrls || []).length === 0 && <p style={{ fontSize: 13, opacity: 0.7, marginTop: 8 }}>Nothing attached yet.</p>}
-        </div>
-      </div>
-
-      <div className="vp-card">
-        <div className="vp-card-header">NOTES &amp; COMPLETION DATE</div>
-        <div className="vp-card-body">
-          <label className="vp-field-label">Date you completed this</label>
-          <input type="date" className="vp-input" value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} />
-          <label className="vp-field-label" style={{ marginTop: 10 }}>Notes (optional)</label>
-          <input type="text" className="vp-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the admin should know..." />
-          <button className="vp-primary-btn" style={{ marginTop: 12 }} onClick={handleSaveNotes} disabled={savingNotes}>
-            {savingNotes ? 'SAVING…' : 'SAVE'}
-          </button>
-        </div>
-      </div>
-
-      <p style={{ fontSize: 12, opacity: 0.65 }}>
-        Submitting evidence notifies the admin for review - they'll mark this compliant on their end once it checks out.
-      </p>
-
-      {task.lastCompletedDate && (
-        <div className="vp-card" style={{ borderColor: 'var(--color-compliant, #3f6b52)' }}>
-          <div className="vp-card-header" style={{ color: 'var(--color-compliant, #3f6b52)' }}>✓ LAST MARKED COMPLIANT</div>
-          <div className="vp-card-body">
-            <p style={{ fontSize: 13, margin: 0 }}>{formatDate(task.lastCompletedDate)}</p>
+        {/* Evidence list */}
+        {(task.pendingEvidenceUrls || []).length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              marginTop: '4px',
+            }}
+          >
+            {(task.pendingEvidenceUrls || []).map((entry, idx) => (
+              <div
+                key={evidenceKey(entry, idx)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '8px 12px',
+                  backgroundColor: '#fafbfc',
+                  borderRadius: '6px',
+                  border: '1px solid #eef2f6',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f8fafc';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#fafbfc';
+                }}
+              >
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>📎</span>
+                <span
+                  style={{
+                    fontSize: '13px',
+                    color: '#2c3e50',
+                    flex: 1,
+                    fontWeight: 500,
+                  }}
+                >
+                  {evidenceLabel(entry)}
+                </span>
+                {isViewable(entry) && (
+                  <button
+                    type="button"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#2c3e50',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      transition: 'background 0.15s ease, color 0.15s ease',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: '2px',
+                      textDecorationColor: '#dce1e8',
+                    }}
+                    onClick={() => handleViewEvidence(entry)}
+                    disabled={viewingKey === evidenceKey(entry, idx)}
+                    onMouseEnter={(e) => {
+                      if (!(viewingKey === evidenceKey(entry, idx))) {
+                        e.target.style.background = '#f0f2f5';
+                        e.target.style.color = '#1a2634';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!(viewingKey === evidenceKey(entry, idx))) {
+                        e.target.style.background = 'none';
+                        e.target.style.color = '#2c3e50';
+                      }
+                    }}
+                  >
+                    {viewingKey === evidenceKey(entry, idx)
+                      ? 'opening…'
+                      : 'VIEW'}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+        {(task.pendingEvidenceUrls || []).length === 0 && (
+          <p
+            style={{
+              fontSize: '13px',
+              color: '#94a3b8',
+              margin: '4px 0 0 0',
+              fontStyle: 'italic',
+            }}
+          >
+            Nothing attached yet.
+          </p>
+        )}
+      </div>
     </div>
-  );
+
+    {/* Notes & Completion Date section */}
+    <div
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #eef2f6',
+        overflow: 'hidden',
+        marginBottom: '16px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
+      }}
+    >
+      <div
+        style={{
+          padding: '12px 20px',
+          backgroundColor: '#f8fafc',
+          borderBottom: '1px solid #eef2f6',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+        }}
+      >
+        <div
+          style={{
+            width: '3px',
+            height: '18px',
+            backgroundColor: '#2c3e50',
+            borderRadius: '4px',
+          }}
+        />
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: '#1a2634',
+            letterSpacing: '0.3px',
+          }}
+        >
+          NOTES &amp; COMPLETION DATE
+        </span>
+      </div>
+      <div
+        style={{
+          padding: '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <div>
+          <label
+            style={{
+              display: 'block',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#2c3e50',
+              marginBottom: '5px',
+            }}
+          >
+            Date you completed this
+          </label>
+          <input
+            type="date"
+            style={{
+              width: '100%',
+              maxWidth: '220px',
+              padding: '8px 12px',
+              fontSize: '14px',
+              borderRadius: '8px',
+              border: '1px solid #dce1e8',
+              backgroundColor: '#fafbfc',
+              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+              outline: 'none',
+              boxSizing: 'border-box',
+              fontFamily: 'inherit',
+            }}
+            value={completedDate}
+            onChange={(e) => setCompletedDate(e.target.value)}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#2c3e50';
+              e.target.style.boxShadow = '0 0 0 3px rgba(44,62,80,0.08)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#dce1e8';
+              e.target.style.boxShadow = 'none';
+            }}
+          />
+        </div>
+
+        <div>
+          <label
+            style={{
+              display: 'block',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: '#2c3e50',
+              marginBottom: '5px',
+            }}
+          >
+            Notes (optional)
+          </label>
+          <input
+            type="text"
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              fontSize: '14px',
+              borderRadius: '8px',
+              border: '1px solid #dce1e8',
+              backgroundColor: '#fafbfc',
+              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#2c3e50';
+              e.target.style.boxShadow = '0 0 0 3px rgba(44,62,80,0.08)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#dce1e8';
+              e.target.style.boxShadow = 'none';
+            }}
+            placeholder="Anything the admin should know..."
+          />
+        </div>
+
+        <button
+          type="button"
+          style={{
+            alignSelf: 'flex-start',
+            padding: '8px 24px',
+            fontSize: '12px',
+            fontWeight: 600,
+            backgroundColor: '#2c3e50',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            transition: 'background-color 0.2s ease',
+            letterSpacing: '0.3px',
+            marginTop: '4px',
+          }}
+          onClick={handleSaveNotes}
+          disabled={savingNotes}
+          onMouseEnter={(e) => {
+            if (!savingNotes) e.target.style.backgroundColor = '#1a2634';
+          }}
+          onMouseLeave={(e) => {
+            if (!savingNotes) e.target.style.backgroundColor = '#2c3e50';
+          }}
+        >
+          {savingNotes ? 'SAVING…' : 'SAVE'}
+        </button>
+      </div>
+    </div>
+
+    {/* Helper text */}
+    <p
+      style={{
+        fontSize: '12px',
+        color: '#94a3b8',
+        margin: '0 0 16px 0',
+        lineHeight: '1.5',
+        paddingLeft: '4px',
+      }}
+    >
+      Submitting evidence notifies the admin for review — they'll mark this
+      compliant on their end once it checks out.
+    </p>
+
+    {/* Last completed section */}
+    {task.lastCompletedDate && (
+      <div
+        style={{
+          backgroundColor: '#edf7f2',
+          borderRadius: '12px',
+          border: '1px solid #c6dfd4',
+          overflow: 'hidden',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#e0f0e8',
+            borderBottom: '1px solid #c6dfd4',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>✓</span>
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#3f6b52',
+              letterSpacing: '0.3px',
+            }}
+          >
+            LAST MARKED COMPLIANT
+          </span>
+        </div>
+        <div style={{ padding: '12px 20px' }}>
+          <p
+            style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              color: '#2c3e50',
+              margin: 0,
+            }}
+          >
+            {formatDate(task.lastCompletedDate)}
+          </p>
+        </div>
+      </div>
+    )}
+  </div>
+);
 };
 
 export default VendorPortal;

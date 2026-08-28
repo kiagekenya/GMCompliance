@@ -1,0 +1,405 @@
+/* EscalationLadder.css
+   Industrial instrumentation styling for the Escalation Ladder page.
+   Palette assumes the Galaxy steel/gauge system already in use across
+   Dashboard.css / SystemInit.css — adjust the hex values below if your
+   tokens differ. */
+
+:root {
+  --esc-steel-900: #1b232c;   /* primary text, headers */
+  --esc-steel-700: #55626d;   /* secondary text */
+  --esc-steel-400: #8b97a1;   /* muted / placeholder text */
+  --esc-steel-200: #d7dee3;   /* borders */
+  --esc-steel-100: #eef1f4;   /* zebra / subpanel fill */
+  --esc-surface: #ffffff;
+
+  --esc-gauge-1: #4f7a8f;     /* level 1 — calm blue-steel */
+  --esc-gauge-2: #c9862f;     /* level 2 — amber */
+  --esc-gauge-3: #c05a2b;     /* level 3 — burnt orange */
+  --esc-gauge-4: #a3311f;     /* level 4+ — rust red */
+
+  --esc-focus: #2b6ca3;
+}
+
+.escalation-page {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: var(--esc-steel-900);
+}
+
+/* ---------- Header ---------- */
+
+.escalation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.escalation-title-block h2 {
+ font-family: var(--font-display, 'Oswald', sans-serif);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0;
+   display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.escalation-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--esc-steel-700);
+  max-width: 52ch;
+  line-height: 1.5;
+}
+
+.escalation-header-actions {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.escalation-test-btn {
+  font-family: 'Oswald', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border-radius: 4px;
+  border: 1px solid var(--esc-steel-900);
+  background: var(--esc-steel-900);
+  color: var(--esc-surface);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.escalation-test-btn:hover:not(:disabled) {
+  background: var(--esc-surface);
+  color: var(--esc-steel-900);
+}
+
+.escalation-test-btn:focus-visible {
+  outline: 2px solid var(--esc-focus);
+  outline-offset: 2px;
+}
+
+.escalation-test-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.escalation-test-result {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  color: var(--esc-steel-700);
+  max-width: 320px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.escalation-test-result.is-error {
+  color: var(--esc-gauge-4);
+}
+
+/* ---------- Table ---------- */
+
+.escalation-table-wrap {
+  margin-top: 20px;
+  border: 1px solid var(--esc-steel-200);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--esc-surface);
+}
+
+.escalation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.escalation-table thead th {
+  font-family: 'Oswald', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--esc-steel-700);
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--esc-steel-100);
+  border-bottom: 1px solid var(--esc-steel-200);
+}
+
+.escalation-table tbody tr.escalation-row {
+  border-bottom: 1px solid var(--esc-steel-200);
+  transition: background 0.12s ease;
+}
+
+.escalation-table tbody tr.escalation-row:last-child {
+  border-bottom: none;
+}
+
+.escalation-table tbody tr.escalation-row:hover {
+  background: var(--esc-steel-100);
+}
+
+.escalation-table td {
+  padding: 12px 16px;
+  vertical-align: middle;
+  color: var(--esc-steel-900);
+}
+
+.escalation-table td.is-mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px;
+  color: var(--esc-steel-700);
+}
+
+.escalation-empty-row td {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--esc-steel-400);
+  font-size: 13px;
+}
+
+/* ---------- Level gauge chip ---------- */
+
+.level-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 13px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.level-chip.level-1 { background: var(--esc-gauge-1); }
+.level-chip.level-2 { background: var(--esc-gauge-2); }
+.level-chip.level-3 { background: var(--esc-gauge-3); }
+.level-chip.level-4 { background: var(--esc-gauge-4); }
+
+/* ---------- Assigned tasks toggle ---------- */
+
+.tasks-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px;
+  color: var(--esc-steel-700);
+  cursor: default;
+}
+
+.tasks-toggle.has-tasks {
+  color: var(--esc-focus);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tasks-toggle.has-tasks:hover {
+  color: var(--esc-steel-900);
+}
+
+.tasks-toggle:focus-visible {
+  outline: 2px solid var(--esc-focus);
+  outline-offset: 2px;
+}
+
+/* ---------- Expanded sub-panel ---------- */
+
+.escalation-subpanel td {
+  background: var(--esc-steel-100);
+  border-left: 3px solid var(--esc-gauge-2);
+  padding: 10px 16px 10px 20px;
+}
+
+.subpanel-item {
+  padding: 5px 0;
+}
+
+.subpanel-item-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--esc-focus);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.subpanel-item-btn:hover {
+  color: var(--esc-steel-900);
+}
+
+.subpanel-item-status {
+  color: var(--esc-steel-400);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  margin-left: 6px;
+}
+
+
+/* ---------- Add Contact — ledger entry row (replaces boxed form) ---------- */
+
+.escalation-add-form {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--esc-steel-200);
+}
+
+.escalation-add-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--esc-steel-400);
+  margin-bottom: 16px;
+}
+
+.escalation-add-label::before {
+  content: '+';
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--esc-gauge-2);
+}
+
+.escalation-add-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--esc-gauge-4);
+  margin: 0 0 14px;
+}
+
+.escalation-add-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.escalation-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 180px;
+  padding: 0 16px 0 0;
+  border-right: 1px solid var(--esc-steel-200);
+  margin-right: 16px;
+}
+
+.escalation-field:last-of-type {
+  border-right: none;
+}
+
+.escalation-field-level {
+  flex: 0 1 130px;
+}
+
+.escalation-field-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--esc-steel-400);
+  margin-bottom: 6px;
+}
+
+.escalation-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 14px;
+  color: var(--esc-steel-900);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--esc-steel-200);
+  border-radius: 0;
+  padding: 6px 2px 8px;
+  transition: border-color 0.12s ease;
+}
+
+.escalation-input::placeholder {
+  color: var(--esc-steel-400);
+}
+
+.escalation-input:focus {
+  outline: none;
+  border-bottom-color: var(--esc-gauge-2);
+}
+
+.escalation-input:focus-visible {
+  outline: none;
+  border-bottom: 2px solid var(--esc-gauge-2);
+  padding-bottom: 7px;
+}
+
+.escalation-input[type='number'] {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.escalation-add-submit {
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-self: flex-end;
+  font-family: 'Oswald', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 9px 4px 8px;
+  border: none;
+  border-bottom: 1px solid var(--esc-steel-900);
+  background: none;
+  color: var(--esc-steel-900);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.escalation-add-submit:hover:not(:disabled) {
+  color: var(--esc-gauge-2);
+  border-bottom-color: var(--esc-gauge-2);
+}
+
+.escalation-add-submit:focus-visible {
+  outline: 2px solid var(--esc-focus);
+  outline-offset: 2px;
+}
+
+.escalation-add-submit:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+  .escalation-field {
+    border-right: none;
+    margin-right: 0;
+    padding-right: 0;
+    flex-basis: 100%;
+    margin-bottom: 14px;
+  }
+  .escalation-add-submit {
+    margin-left: 0;
+  }
+}

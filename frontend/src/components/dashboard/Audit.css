@@ -1,0 +1,496 @@
+/* =========================================================
+   AUDIT ARCHIVE
+   Galaxy Midstream
+   ---------------------------------------------------------
+   Styling for the Audit Archive page only.
+   ========================================================= */
+
+
+/* =========================================================
+   01. PAGE
+   ========================================================= */
+
+.archive-page {
+  width: 100%;
+  min-width: 0;
+
+  padding-bottom: 35px;
+
+  color: var(--gm-text, #17232c);
+}
+
+
+/* =========================================================
+   02. PAGE HEADER
+   ========================================================= */
+
+.archive-page h2 {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  
+
+  color: var(--gm-primary-deep, #071c29);
+ 
+ font-family: var(--font-display, 'Oswald', sans-serif);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  
+}
+
+.archive-page h2::before {
+  content: "";
+
+  width: 3px;
+  height: 20px;
+
+  margin-right: 10px;
+
+  /* background: var(--gm-accent, #e6a52f); */
+  border-radius: 2px;
+}
+
+
+/* =========================================================
+   03. LOADING STATE
+   ========================================================= */
+
+.archive-loading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  min-height: 47px;
+
+  margin: 0;
+
+  padding: 0 14px;
+
+  background: var(--gm-surface, #fff);
+
+  border: 1px solid var(--gm-border, #dce3e7);
+  border-radius: 7px;
+
+  color: var(--gm-text-secondary, #52616b);
+
+  font-size: 12.5px;
+}
+
+.archive-loading::before {
+  content: "";
+
+  width: 6px;
+  height: 6px;
+
+  flex: 0 0 auto;
+
+  border-radius: 50%;
+
+  background: var(--gm-accent, #e6a52f);
+}
+
+
+/* =========================================================
+   04. EMPTY ARCHIVE
+   ========================================================= */
+
+.archive-empty {
+  display: flex;
+  align-items: center;
+
+  min-height: 64px;
+
+  margin: 0;
+
+  padding: 0 16px;
+
+  background: var(--gm-surface, #fff);
+
+  border: 1px solid var(--gm-border, #dce3e7);
+  border-radius: 7px;
+
+  color: var(--gm-text-muted, #7b8790);
+
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   05. TABLE CONTAINER
+   ========================================================= */
+
+.archive-table-wrap {
+  width: 100%;
+  min-width: 0;
+
+  background: var(--gm-surface, #fff);
+
+  border: 1px solid var(--gm-border, #dce3e7);
+  border-radius: 8px;
+
+  box-shadow:
+    0 1px 2px rgba(13, 30, 40, 0.04),
+    0 5px 18px rgba(13, 30, 40, 0.035);
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  scrollbar-width: thin;
+  scrollbar-color: #c5cdd2 transparent;
+}
+
+.archive-table-wrap::-webkit-scrollbar {
+  height: 7px;
+}
+
+.archive-table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.archive-table-wrap::-webkit-scrollbar-thumb {
+  background: #c5cdd2;
+  border-radius: 10px;
+}
+
+
+/* =========================================================
+   06. ARCHIVE TABLE
+   ========================================================= */
+
+.archive-table {
+  width: 100%;
+  min-width: 850px;
+
+  border-collapse: separate;
+  border-spacing: 0;
+
+  color: var(--gm-text, #17232c);
+
+  font-size: 13px;
+}
+
+.archive-table thead th {
+  height: 43px;
+
+  padding: 0 15px;
+
+  background: #f7f9fa;
+
+  border-bottom: 1px solid var(--gm-border, #dce3e7);
+
+  color: var(--gm-text-muted, #7b8790);
+
+  font-size: 10.5px;
+  line-height: 1.2;
+  font-weight: 700;
+
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+
+  white-space: nowrap;
+}
+
+.archive-table tbody td {
+  min-height: 54px;
+
+  padding: 11px 15px;
+
+  border-bottom: 1px solid var(--gm-border-light, #e9eef1);
+
+  color: var(--gm-text-secondary, #52616b);
+
+  line-height: 1.45;
+
+  vertical-align: middle;
+}
+
+.archive-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.archive-table tbody tr {
+  transition: background 150ms ease;
+}
+
+.archive-table tbody tr:hover {
+  background: #fafcfd;
+}
+
+
+/* =========================================================
+   07. DATE COLUMN
+   ========================================================= */
+
+.archive-date {
+  color: var(--gm-primary-deep, #071c29) !important;
+
+  font-size: 12.5px;
+
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   08. REGULATION COLUMN
+   ========================================================= */
+
+.archive-regulation {
+  min-width: 230px;
+}
+
+.archive-regulation-title {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: var(--gm-primary-deep, #071c29);
+
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 650;
+}
+
+.archive-regulation-source {
+  display: block;
+
+  color: var(--gm-text-muted, #7b8790);
+
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+
+/* =========================================================
+   09. CATEGORY
+   ========================================================= */
+
+.archive-category {
+  color: var(--gm-text-secondary, #52616b);
+
+  font-size: 12.5px;
+}
+
+
+/* =========================================================
+   10. COMPLETED BY
+   ========================================================= */
+
+.archive-completed-by {
+  color: var(--gm-text, #17232c);
+
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+
+/* =========================================================
+   11. EVIDENCE
+   ========================================================= */
+
+.archive-evidence {
+  min-width: 190px;
+}
+
+.archive-evidence-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  min-width: 0;
+
+  margin: 2px 0;
+}
+
+.archive-evidence-name {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color: var(--gm-text-secondary, #52616b);
+
+  font-size: 11.5px;
+  line-height: 1.4;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-evidence-empty {
+  color: var(--gm-text-muted, #9aa4aa);
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   12. VIEW EVIDENCE BUTTON
+   ========================================================= */
+
+.archive-view-btn {
+  flex: 0 0 auto;
+
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color: var(--gm-primary, #0b2738);
+
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1.4;
+  font-weight: 700;
+
+  letter-spacing: 0.025em;
+
+  cursor: pointer;
+
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.archive-view-btn:hover {
+  color: var(--gm-primary-deep, #071c29);
+
+  text-decoration: underline;
+}
+
+.archive-view-btn:focus-visible {
+  outline: 3px solid rgba(230, 165, 47, 0.24);
+  outline-offset: 3px;
+
+  border-radius: 2px;
+}
+
+
+/* =========================================================
+   13. EVIDENCE TYPE INDICATOR
+   ========================================================= */
+
+.archive-evidence-item::before {
+  content: "";
+
+  width: 5px;
+  height: 5px;
+
+  flex: 0 0 auto;
+
+  border-radius: 50%;
+
+  background: #aeb8be;
+}
+
+.archive-evidence-item:has(.archive-view-btn)::before {
+  background: var(--gm-accent, #e6a52f);
+}
+
+
+/* =========================================================
+   14. RESPONSIVE — LARGE DESKTOP
+   ========================================================= */
+
+@media (min-width: 1500px) {
+  .archive-page h2 {
+    font-size: 22px;
+  }
+
+  .archive-table {
+    min-width: 0;
+  }
+
+  .archive-table thead th {
+    padding-left: 17px;
+    padding-right: 17px;
+  }
+
+  .archive-table tbody td {
+    padding-left: 17px;
+    padding-right: 17px;
+  }
+}
+
+
+/* =========================================================
+   15. TABLET
+   ========================================================= */
+
+@media (max-width: 1000px) {
+  .archive-table {
+    min-width: 800px;
+  }
+
+  .archive-regulation {
+    min-width: 210px;
+  }
+}
+
+
+/* =========================================================
+   16. MOBILE
+   ========================================================= */
+
+@media (max-width: 650px) {
+  .archive-page h2 {
+    margin-bottom: 19px;
+
+    font-size: 22px;
+  }
+
+  .archive-page h2::before {
+    height: 18px;
+  }
+
+  .archive-table {
+    min-width: 760px;
+  }
+
+  .archive-table thead th {
+    height: 40px;
+
+    padding: 0 12px;
+
+    font-size: 10px;
+  }
+
+  .archive-table tbody td {
+    padding: 10px 12px;
+  }
+}
+
+
+/* =========================================================
+   17. VERY SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 400px) {
+  .archive-page h2 {
+    font-size: 20px;
+  }
+
+  .archive-loading,
+  .archive-empty {
+    font-size: 12px;
+  }
+}
+
+
+/* =========================================================
+   18. REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-table tbody tr,
+  .archive-view-btn {
+    transition: none;
+  }
+}

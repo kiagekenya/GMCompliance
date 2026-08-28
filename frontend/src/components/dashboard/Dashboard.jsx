@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import './Dashboard.css';
+import './Escalationladder.css';
+import './Vendor.css';
+import './Audit.css';
 import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
 import SettingsPage from '../settings/SettingsPage';
@@ -21,6 +24,8 @@ const mapStatusForDisplay = (backendStatus) => {
   if (backendStatus === 'awaiting_input') return 'needs setup';
   return '';
 };
+
+const levelChipClass = (level) => `level-chip level-${Math.min(Math.max(Number(level) || 1, 1), 4)}`;
 
 const mapItemForDisplay = (item) => ({
   id: item._id,
@@ -281,23 +286,76 @@ const AddContactForm = ({ onSubmit, existingCount }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="ledger-scroll" style={{ height: 'auto', padding: 16, marginTop: 16 }}>
-      <div className="card-label" style={{ marginBottom: 10 }}>ADD CONTACT</div>
-      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-        <input className="form-input" placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-        <input className="form-input" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-        <input className="form-input" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input className="form-input" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        <input className="form-input" placeholder="Escalation level (1 = notified first)" type="number" min="1" value={form.escalationLevel} onChange={(e) => setForm({ ...form, escalationLevel: e.target.value })} />
+    <form onSubmit={handleSubmit} className="escalation-add-form">
+      <div className="escalation-add-label">New ledger entry</div>
+
+      {error && <p className="escalation-add-error">⚠ {error}</p>}
+
+      <div className="escalation-add-row">
+        <div className="escalation-field">
+          <label className="escalation-field-label" htmlFor="ac-name">Full name</label>
+          <input
+            id="ac-name"
+            className="escalation-input"
+            placeholder="Name ABC"
+            value={form.fullName}
+            onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+          />
+        </div>
+
+        <div className="escalation-field">
+          <label className="escalation-field-label" htmlFor="ac-title">Title</label>
+          <input
+            id="ac-title"
+            className="escalation-input"
+            placeholder="Title XYZ"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          />
+        </div>
+
+        <div className="escalation-field">
+          <label className="escalation-field-label" htmlFor="ac-email">Email</label>
+          <input
+            id="ac-email"
+            className="escalation-input"
+            placeholder="name@company.com"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+        </div>
+
+        <div className="escalation-field">
+          <label className="escalation-field-label" htmlFor="ac-phone">Phone</label>
+          <input
+            id="ac-phone"
+            className="escalation-input"
+            placeholder="(555) 010-0000"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          />
+        </div>
+
+        <div className="escalation-field escalation-field-level">
+          <label className="escalation-field-label" htmlFor="ac-level">Level</label>
+          <input
+            id="ac-level"
+            className="escalation-input"
+            placeholder={String(existingCount + 1)}
+            type="number"
+            min="1"
+            value={form.escalationLevel}
+            onChange={(e) => setForm({ ...form, escalationLevel: e.target.value })}
+          />
+        </div>
+
+        <button type="submit" className="escalation-add-submit" disabled={submitting}>
+          {submitting ? 'Adding…' : '+ Add entry'}
+        </button>
       </div>
-      <button type="submit" className="action-button save" disabled={submitting}>
-        {submitting ? 'ADDING…' : 'ADD CONTACT'}
-      </button>
     </form>
   );
 };
-
 // AddVendorForm (manual typed vendor entry) has been removed - vendors are
 // now added by picking a real, self-registered profile from
 // FindVendorsSection below, which auto-fills their info instead of an
@@ -326,11 +384,6 @@ const VendorDirectoryTable = ({ vendorList, onVendorsChanged }) => {
   profiles.forEach((p) => { if (p.vendorUserId?.email) profileByEmail[p.vendorUserId.email] = p; });
   const viewing = viewingEmail ? profileByEmail[viewingEmail] : null;
 
-  // "Revoke" cuts the vendor's portal access (they stop seeing this
-  // operator's data / tasks) but keeps the contact entry around, so it can
-  // be re-granted later from FindVendorsSection without losing history.
-  // "Remove" deletes the contact entirely - deleteVendor.js on the backend
-  // already unassigns any tasks pointing at it so nothing dangles.
   const handleRevoke = async (id) => {
     setActionError('');
     setBusyId(id);
@@ -364,8 +417,8 @@ const VendorDirectoryTable = ({ vendorList, onVendorsChanged }) => {
 
   return (
     <>
-      <div className="settings-section-header"><div className="card-label">VENDOR DIRECTORY</div></div>
-      {actionError && <p style={{ color: '#c0392b', fontSize: 13, padding: '0 4px' }}>⚠ {actionError}</p>}
+      <div className="settings-section-header"><div className="card-label">Vendor directory</div></div>
+      {actionError && <p className="vendor-error">⚠ {actionError}</p>}
       <div className="ledger-scroll" style={{ height: 'auto' }}>
         <table>
           <thead>
@@ -373,25 +426,48 @@ const VendorDirectoryTable = ({ vendorList, onVendorsChanged }) => {
           </thead>
           <tbody>
             {vendorList.length === 0 ? (
-              <tr><td colSpan="8" style={{ padding: 16, opacity: 0.7 }}>No vendors yet - add one from Find Vendors below.</td></tr>
+              <tr><td colSpan="8" className="vendor-empty-cell">No vendors yet — add one from Find Vendors below.</td></tr>
             ) : vendorList.map((v) => (
               <tr key={v._id || v.id}>
-                <td>{v.companyName}</td><td>{v.personnelName}</td><td>{v.email}</td><td>{v.phone}</td><td>{v.serviceScope}</td>
-                <td>{v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}</td>
+                <td>{v.companyName}</td>
+                <td>{v.personnelName}</td>
+                <td className="vendor-cell-muted">{v.email}</td>
+                <td className="vendor-cell-muted">{v.phone}</td>
+                <td>{v.serviceScope}</td>
                 <td>
-                  {profileByEmail[v.email] ? (
-                    <button type="button" className="row-icon-btn" onClick={() => setViewingEmail(v.email)}>View Profile</button>
+                  {v.hasPortalAccess ? (
+                    <span className="profile-chip on"><span className="profile-chip-dot"></span>Granted</span>
                   ) : (
-                    <span style={{ opacity: 0.4, fontSize: 12 }}>No profile set up</span>
+                    <span className="vendor-cell-muted">Not granted</span>
                   )}
                 </td>
-                <td style={{ whiteSpace: 'nowrap' }}>
+                <td>
+                  {profileByEmail[v.email] ? (
+                    <button type="button" className="vendor-link-btn" onClick={() => setViewingEmail(v.email)}>View profile</button>
+                  ) : (
+                    <span className="vendor-cell-muted">No profile set up</span>
+                  )}
+                </td>
+                <td className="vendor-actions-cell">
                   {v.hasPortalAccess && (
-                    <button type="button" className="row-icon-btn" disabled={busyId === v._id} onClick={() => handleRevoke(v._id)} title="Stop this vendor from seeing your data - keeps the contact on file">
-                      {busyId === v._id ? '…' : 'Revoke Access'}
+                    <button
+                      type="button"
+                      className="vendor-link-btn"
+                      disabled={busyId === v._id}
+                      onClick={() => handleRevoke(v._id)}
+                      title="Stop this vendor from seeing your data - keeps the contact on file"
+                    >
+                      {busyId === v._id ? '…' : 'Revoke access'}
                     </button>
-                  )}{' '}
-                  <button type="button" className="row-icon-btn danger" disabled={busyId === v._id} onClick={() => handleRemove(v._id, v.companyName)} aria-label="Remove vendor" title="Remove this vendor entirely">
+                  )}
+                  <button
+                    type="button"
+                    className="vendor-icon-btn"
+                    disabled={busyId === v._id}
+                    onClick={() => handleRemove(v._id, v.companyName)}
+                    aria-label="Remove vendor"
+                    title="Remove this vendor entirely"
+                  >
                     <i className="fas fa-trash"></i>
                   </button>
                 </td>
@@ -402,19 +478,31 @@ const VendorDirectoryTable = ({ vendorList, onVendorsChanged }) => {
       </div>
 
       {viewing && (
-        <div style={{ padding: 16, marginTop: 16, border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div className="card-label">{viewing.companyName}</div>
-            <button type="button" className="row-icon-btn" onClick={() => setViewingEmail(null)}>Close</button>
+        <div className="vendor-spec-panel">
+          <div className="vendor-spec-header">
+            <span className="vendor-spec-title">{viewing.companyName}</span>
+            <button type="button" className="vendor-link-btn" onClick={() => setViewingEmail(null)}>Close</button>
           </div>
-          {viewing.description && <p style={{ fontSize: 13, marginBottom: 10 }}>{viewing.description}</p>}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-            <div><strong>Phone:</strong> {viewing.phone || '—'}</div>
-            <div><strong>Website:</strong> {viewing.website || '—'}</div>
-            <div><strong>Service area:</strong> {viewing.serviceArea || '—'}</div>
-            <div><strong>Years in business:</strong> {viewing.yearsInBusiness ?? '—'}</div>
-            <div style={{ gridColumn: '1 / -1' }}><strong>Certifications:</strong> {viewing.certifications || '—'}</div>
-            <div style={{ gridColumn: '1 / -1' }}><strong>Services offered:</strong> {(viewing.serviceCategories || []).join(', ') || '—'}</div>
+          {viewing.description && <p className="vendor-spec-desc">{viewing.description}</p>}
+          <div className="vendor-spec-grid">
+            <div>
+              <span className="vendor-spec-label">Phone</span>{viewing.phone || '—'}
+            </div>
+            <div>
+              <span className="vendor-spec-label">Website</span>{viewing.website || '—'}
+            </div>
+            <div>
+              <span className="vendor-spec-label">Service area</span>{viewing.serviceArea || '—'}
+            </div>
+            <div>
+              <span className="vendor-spec-label">Years in business</span>{viewing.yearsInBusiness ?? '—'}
+            </div>
+            <div className="span-2">
+              <span className="vendor-spec-label">Certifications</span>{viewing.certifications || '—'}
+            </div>
+            <div className="span-2">
+              <span className="vendor-spec-label">Services offered</span>{(viewing.serviceCategories || []).join(', ') || '—'}
+            </div>
           </div>
         </div>
       )}
@@ -422,11 +510,6 @@ const VendorDirectoryTable = ({ vendorList, onVendorsChanged }) => {
   );
 };
 
-// Adds a real, self-registered vendor straight to this operator's list -
-// the ONE way an operator adds a vendor now (see FindVendorsSection below).
-// Already-added vendors (cross-referenced by email against vendorList) show
-// a plain confirmation instead of a button, so it's never ambiguous whether
-// clicking again would duplicate anything.
 const AddVendorButton = ({ vendorUserId, alreadyAdded, onAdded }) => {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
@@ -447,13 +530,13 @@ const AddVendorButton = ({ vendorUserId, alreadyAdded, onAdded }) => {
   };
 
   if (alreadyAdded || justAdded) {
-    return <span style={{ fontSize: 12, fontWeight: 700, color: '#3f6b52' }}>✓ Added to your vendors</span>;
+    return <span className="vendor-added-label">✓ Added</span>;
   }
   return (
-    <div>
-      {error && <p style={{ color: '#c0392b', fontSize: 12, margin: '0 0 6px' }}>{error}</p>}
-      <button type="button" className="action-button save" onClick={handleAdd} disabled={adding}>
-        {adding ? 'ADDING…' : 'ADD VENDOR'}
+    <div className="vendor-find-action">
+      {error && <p className="vendor-add-error">{error}</p>}
+      <button type="button" className="vendor-add-btn" onClick={handleAdd} disabled={adding}>
+        {adding ? 'Adding…' : 'Add vendor'}
       </button>
     </div>
   );
@@ -475,39 +558,38 @@ const FindVendorsSection = ({ vendorList, onVendorAdded }) => {
       .finally(() => setLoading(false));
   }, []);
 
-  // Only vendors with CURRENTLY granted access count as "already added" -
-  // one revoked via VendorDirectoryTable's "Revoke Access" falls back to
-  // showing the ADD VENDOR button here, which re-grants access (the backend
-  // updates the existing contact rather than duplicating it either way).
   const addedEmails = new Set(vendorList.filter((v) => v.hasPortalAccess).map((v) => v.email));
 
   return (
     <>
-      <div className="settings-section-header"><div className="card-label">FIND VENDORS</div></div>
-      <p style={{ fontSize: 13, opacity: 0.7, margin: '8px 0 12px' }}>
-        Every vendor registered on the platform. Click a name to add them straight to your vendor list - no retyping their info.
-      </p>
-      {loading && <p style={{ opacity: 0.7, fontSize: 13 }}>Loading…</p>}
-      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
-      {!loading && !error && profiles.length === 0 && <p style={{ opacity: 0.7, fontSize: 13 }}>No vendors have set up a profile yet.</p>}
-      {profiles.map((p) => (
-        <div key={p._id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', padding: 16, marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-            <div>
-              <strong style={{ fontSize: 15 }}>{p.companyName}</strong>
-              {p.description && <p style={{ fontSize: 13, opacity: 0.8, margin: '4px 0' }}>{p.description}</p>}
-              <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>
-                {(p.serviceCategories || []).join(', ') || 'No services listed'}{p.serviceArea ? ` · ${p.serviceArea}` : ''}
-              </p>
+      <div className="settings-section-header"><div className="card-label">Find vendors</div></div>
+      {/* <p className="vendor-section-note">
+        Every vendor registered on the platform. Add one straight to your vendor list — no retyping their info.
+      </p> */}
+      {loading && <p className="vendor-loading">Loading…</p>}
+      {error && <p className="vendor-error">⚠ {error}</p>}
+      {!loading && !error && profiles.length === 0 && <p className="vendor-loading">No vendors have set up a profile yet.</p>}
+      {profiles.length > 0 && (
+        <div className="vendor-find-list">
+          {profiles.map((p) => (
+            <div key={p._id} className="vendor-find-row">
+              <div className="vendor-find-main">
+                <div className="vendor-find-name">{p.companyName}</div>
+                {p.description && <p className="vendor-find-desc">{p.description}</p>}
+                <div className="vendor-find-meta">
+                  {(p.serviceCategories || []).join(', ') || 'No services listed'}
+                  {p.serviceArea ? ` · ${p.serviceArea}` : ''}
+                </div>
+              </div>
+              <AddVendorButton
+                vendorUserId={p.vendorUserId?._id}
+                alreadyAdded={addedEmails.has(p.vendorUserId?.email)}
+                onAdded={onVendorAdded}
+              />
             </div>
-            <AddVendorButton
-              vendorUserId={p.vendorUserId?._id}
-              alreadyAdded={addedEmails.has(p.vendorUserId?.email)}
-              onAdded={onVendorAdded}
-            />
-          </div>
+          ))}
         </div>
-      ))}
+      )}
     </>
   );
 };
@@ -525,33 +607,34 @@ const ConnectionRequestRow = ({ request, onRespond }) => {
   };
 
   return (
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', padding: 12, marginBottom: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong style={{ fontSize: 13 }}>{vendorLabel}</strong>
-        <span style={{ fontSize: 11, fontWeight: 700 }}>{request.status.toUpperCase()}</span>
+    <div className="connection-row">
+      <div className="connection-row-top">
+        <span className="connection-vendor-name">{vendorLabel}</span>
+        <span className={`connection-status-tag status-${request.status}`}>{request.status}</span>
       </div>
+
       {regulation && (
-        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, margin: '4px 0 0' }}>
-          RE: {regulation.title} <span style={{ fontFamily: 'monospace', fontSize: 10 }}>({regulation.sourceRegulation})</span>
-        </div>
+        <p className="connection-regulation">
+          Re: {regulation.title} <code>({regulation.sourceRegulation})</code>
+        </p>
       )}
-      {request.message && <p style={{ fontSize: 13, margin: '4px 0' }}>{request.message}</p>}
+
+      {request.message && <p className="connection-message">{request.message}</p>}
+
       {request.initiatedBy === 'vendor' && request.status === 'pending' && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          <button type="button" className="action-button save" onClick={() => respond('accepted')} disabled={responding}>ACCEPT</button>
-          <button type="button" className="row-icon-btn" onClick={() => respond('declined')} disabled={responding}>Decline</button>
+        <div className="connection-row-actions">
+          <button type="button" className="connection-accept-btn" onClick={() => respond('accepted')} disabled={responding}>
+            Accept
+          </button>
+          <button type="button" className="connection-decline-btn" onClick={() => respond('declined')} disabled={responding}>
+            Decline
+          </button>
         </div>
       )}
     </div>
   );
 };
 
-// Requests vendors have sent THIS operator, pitching a specific regulation
-// (see MarketplacePage.jsx's "Offer to help" on the vendor side) - the only
-// direction left now that adding a vendor is a direct one-click action
-// above, not a request/response handshake. Accepting (see
-// backend/utils/connectionRequests.js) grants portal access automatically,
-// same outcome as clicking ADD VENDOR above.
 const ConnectionRequestsSection = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -574,14 +657,18 @@ const ConnectionRequestsSection = () => {
 
   return (
     <>
-      <div className="settings-section-header"><div className="card-label">REQUESTS FROM VENDORS</div></div>
-      <p style={{ fontSize: 13, opacity: 0.7, margin: '8px 0 12px' }}>
+      <div className="settings-section-header"><div className="card-label">Requests from vendors</div></div>
+      {/* <p className="vendor-section-note">
         Vendors offering to help with one of your specific regulations. Accepting adds them to your vendor list automatically.
-      </p>
-      {loading && <p style={{ opacity: 0.7, fontSize: 13 }}>Loading…</p>}
-      {error && <p style={{ color: '#c0392b', fontSize: 13 }}>{error}</p>}
-      {!loading && !error && requests.length === 0 && <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing yet.</p>}
-      {requests.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
+      </p> */}
+      {loading && <p className="vendor-loading">Loading…</p>}
+      {error && <p className="vendor-error">⚠ {error}</p>}
+      {!loading && !error && requests.length === 0 && <p className="connection-empty">Nothing yet.</p>}
+      {requests.length > 0 && (
+        <div className="connection-list">
+          {requests.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
+        </div>
+      )}
     </>
   );
 };
@@ -939,113 +1026,185 @@ const ComplianceDashboard = ({ configData }) => {
   };
 
   const ArchivePage = () => (
-    <>
-      <h2>Audit Archive</h2>
-      {archiveLoading && <p>Loading archive…</p>}
-      {!archiveLoading && archiveEntries.length === 0 && (
-        <p style={{ opacity: 0.7 }}>Nothing logged yet. Entries appear here the moment anything is marked compliant.</p>
-      )}
-      {!archiveLoading && archiveEntries.length > 0 && (
-        <div className="ledger-scroll" style={{ height: 'auto' }}>
-          <table>
-            <thead>
-              <tr><th>Date Completed</th><th>Regulation</th><th>Category</th><th>Completed By</th><th>Evidence</th></tr>
-            </thead>
-            <tbody>
-              {archiveEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>{formatDate(entry.completedDate)}</td>
-                  <td><strong>{entry.regulationTitle}</strong><div style={{ fontSize: 12, opacity: 0.7 }}>{entry.sourceRegulation}</div></td>
-                  <td>{entry.categoryName}</td>
-                  <td>{entry.completedBy}</td>
-                  <td>
-                    {(entry.evidenceUrls || []).length === 0 ? '—' : (entry.evidenceUrls || []).map((ev, idx) => (
-                      <div key={evidenceKey(ev, idx)} style={{ fontSize: 12 }}>
-                        {evidenceLabel(ev)}
+  <div className="archive-page">
+    <h2>Audit Archive</h2>
+
+    {archiveLoading && (
+      <p className="archive-loading">
+        Loading archive…
+      </p>
+    )}
+
+    {!archiveLoading && archiveEntries.length === 0 && (
+      <p className="archive-empty">
+        Nothing logged yet. Entries appear here the moment anything is marked compliant.
+      </p>
+    )}
+
+    {!archiveLoading && archiveEntries.length > 0 && (
+      <div className="archive-table-wrap">
+        <table className="archive-table">
+          <thead>
+            <tr>
+              <th>Date Completed</th>
+              <th>Regulation</th>
+              <th>Category</th>
+              <th>Completed By</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {archiveEntries.map((entry) => (
+              <tr key={entry.id}>
+                <td className="archive-date">
+                  {formatDate(entry.completedDate)}
+                </td>
+
+                <td className="archive-regulation">
+                  <strong className="archive-regulation-title">
+                    {entry.regulationTitle}
+                  </strong>
+
+                  <span className="archive-regulation-source">
+                    {entry.sourceRegulation}
+                  </span>
+                </td>
+
+                <td className="archive-category">
+                  {entry.categoryName}
+                </td>
+
+                <td className="archive-completed-by">
+                  {entry.completedBy}
+                </td>
+
+                <td className="archive-evidence">
+                  {(entry.evidenceUrls || []).length === 0 ? (
+                    <span className="archive-evidence-empty">
+                      —
+                    </span>
+                  ) : (
+                    (entry.evidenceUrls || []).map((ev, idx) => (
+                      <div
+                        key={evidenceKey(ev, idx)}
+                        className="archive-evidence-item"
+                      >
+                        <span className="archive-evidence-name">
+                          {evidenceLabel(ev)}
+                        </span>
+
                         {isViewableEvidence(ev) && (
                           <button
                             type="button"
+                            className="archive-view-btn"
                             onClick={() => handleViewArchiveEvidence(ev)}
-                            style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', marginLeft: 6, fontSize: 12, padding: 0 }}
                           >
                             VIEW
                           </button>
                         )}
                       </div>
-                    ))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
-  );
+                    ))
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+);
 
   const EscalationPage = () => (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  <div className="escalation-page">
+    <div className="escalation-header">
+      <div className="escalation-title-block">
         <h2>Escalation Ladder</h2>
-        <div style={{ textAlign: 'right' }}>
-          <button className="action-button save" onClick={handleTestNotifications} disabled={testingNotifications}>
-            {testingNotifications ? 'CHECKING…' : 'TEST NOTIFICATIONS NOW'}
-          </button>
-          {testResult && (
-            <p style={{ fontSize: 12, marginTop: 6, opacity: 0.8 }}>
-              {testResult.error
-                ? `⚠ ${testResult.error}`
-                : `Checked ${testResult.checked} item(s), ${testResult.updated} status change(s), ${testResult.notified} notification(s) sent. Check the backend console (or your inbox if SMTP is set up).`}
-            </p>
-          )}
-        </div>
+        {/* <p className="escalation-subtitle">
+          Reminders fire automatically once a day as items enter their due window — use
+          the button to check right now instead of waiting.
+        </p> */}
       </div>
-      <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8 }}>
-        Reminders fire automatically once a day as items enter their due window - use the button above to check right now instead of waiting.
-      </p>
 
-      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 12 }}>
-        <table>
-          <thead>
-            <tr><th>Level</th><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th>Assigned Tasks</th></tr>
-          </thead>
-          <tbody>
-            {contacts.length === 0 ? (
-              <tr><td colSpan="6" style={{ padding: 16, opacity: 0.7 }}>No contacts yet - add one below.</td></tr>
-            ) : contacts.map((c) => {
+      <div className="escalation-header-actions">
+        <button
+          type="button"
+          className="escalation-test-btn"
+          onClick={handleTestNotifications}
+          disabled={testingNotifications}
+        >
+          {testingNotifications ? 'Checking…' : 'Test notifications now'}
+        </button>
+
+        {testResult && (
+          <p className={`escalation-test-result${testResult.error ? ' is-error' : ''}`}>
+            {testResult.error
+              ? `⚠ ${testResult.error}`
+              : `Checked ${testResult.checked} item(s), ${testResult.updated} status change(s), ${testResult.notified} notification(s) sent. Check the backend console (or your inbox if SMTP is set up).`}
+          </p>
+        )}
+      </div>
+    </div>
+
+    <div className="escalation-table-wrap">
+      <table className="escalation-table">
+        <thead>
+          <tr>
+            <th>Level</th>
+            <th>Name</th>
+            <th>Title</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Assigned tasks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {contacts.length === 0 ? (
+            <tr className="escalation-empty-row">
+              <td colSpan="6">No contacts yet — add one below.</td>
+            </tr>
+          ) : (
+            contacts.map((c) => {
               const assigned = assignedItemsFor(c._id);
               const isOpen = expandedContactId === c._id;
               return (
                 <React.Fragment key={c._id}>
-                  <tr>
-                    <td>{c.escalationLevel}</td>
+                  <tr className="escalation-row">
+                    <td>
+                      <span className={levelChipClass(c.escalationLevel)}>{c.escalationLevel}</span>
+                    </td>
                     <td>{c.fullName}</td>
                     <td>{c.title}</td>
-                    <td>{c.email}</td>
-                    <td>{c.phone}</td>
+                    <td className="is-mono">{c.email}</td>
+                    <td className="is-mono">{c.phone}</td>
                     <td>
                       <button
                         type="button"
+                        className={`tasks-toggle${assigned.length ? ' has-tasks' : ''}`}
                         onClick={() => setExpandedContactId(isOpen ? null : c._id)}
-                        style={{ border: 'none', background: 'none', cursor: assigned.length ? 'pointer' : 'default', textDecoration: assigned.length ? 'underline' : 'none' }}
                         disabled={assigned.length === 0}
                       >
                         {assigned.length} task{assigned.length === 1 ? '' : 's'}
                       </button>
                     </td>
                   </tr>
+
                   {isOpen && assigned.length > 0 && (
-                    <tr>
-                      <td colSpan="6" style={{ background: 'rgba(0,0,0,0.03)', padding: 12 }}>
+                    <tr className="escalation-subpanel">
+                      <td colSpan="6">
                         {assigned.map((r) => (
-                          <div key={r.id} style={{ padding: '4px 0' }}>
+                          <div key={r.id} className="subpanel-item">
                             <button
                               type="button"
+                              className="subpanel-item-btn"
                               onClick={() => navigate(`/dashboard/requirement/${r.id}`)}
-                              style={{ border: 'none', background: 'none', color: '#2b5c8a', cursor: 'pointer', textDecoration: 'underline', textAlign: 'left' }}
                             >
-                              {r.description} <span style={{ opacity: 0.6 }}>({r.status || 'not completed'})</span>
+                              {r.description}
                             </button>
+                            <span className="subpanel-item-status">
+                              ({r.status || 'not completed'})
+                            </span>
                           </div>
                         ))}
                       </td>
@@ -1053,29 +1212,37 @@ const ComplianceDashboard = ({ configData }) => {
                   )}
                 </React.Fragment>
               );
-            })}
-          </tbody>
-        </table>
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    <AddContactForm onSubmit={submitNewContact} existingCount={contacts.length} />
+  </div>
+);
+
+ const VendorsPage = () => (
+  <div className="vendors-page">
+    <div className="vendors-header">
+      <div className="vendors-title-block">
+        <h2>VENDORS</h2>
+        {/* <p className="vendors-subtitle">
+          Contractors and service providers on file, the marketplace of registered vendors you can add from, and any requests they've sent you.
+        </p> */}
       </div>
+    </div>
 
-      <AddContactForm onSubmit={submitNewContact} existingCount={contacts.length} />
-    </>
-  );
+    
+    <VendorDirectoryTable vendorList={vendorList} onVendorsChanged={fetchVendors} />
 
-  const VendorsPage = () => (
-    <>
-      <h2>Vendors</h2>
-      <VendorDirectoryTable vendorList={vendorList} onVendorsChanged={fetchVendors} />
+    
+    <FindVendorsSection vendorList={vendorList} onVendorAdded={fetchVendors} />
 
-      <div style={{ marginTop: 24 }}>
-        <FindVendorsSection vendorList={vendorList} onVendorAdded={fetchVendors} />
-      </div>
-
-      <div style={{ marginTop: 24 }}>
-        <ConnectionRequestsSection />
-      </div>
-    </>
-  );
+    
+    <ConnectionRequestsSection />
+  </div>
+);
 
   return (
     <div className="app-container">

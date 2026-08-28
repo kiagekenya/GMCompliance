@@ -12,6 +12,7 @@
 // separate, bigger feature. This only updates the stored profile answers.
 
 import React, { useEffect, useState } from 'react';
+import './SettingsPage.css';
 import {
   getProfile, saveProfile, updateContact, deleteContact, updateVendor, deleteVendor,
   getSuggestedRequirements, confirmComplianceItems,
@@ -176,150 +177,156 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
   };
 
   return (
-    <>
-      <h2>System Settings</h2>
-      <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8 }}>
-        Everything entered during setup, in one place - view, edit, or remove it.
-      </p>
-
-      {/* ---- Pipeline Profile ---- */}
-      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 16 }}>
-        <div className="settings-section-header">
-          <div className="card-label">PIPELINE PROFILE</div>
-          {!profileLoading && profile && !editingProfile && (
-            <button className="action-button edit" onClick={() => setEditingProfile(true)}>
-              <i className="fas fa-user-edit"></i> EDIT
-            </button>
-          )}
-        </div>
-
-        <div className="settings-section-body">
-        {profileLoading && <p>Loading profile…</p>}
-        {profileError && <p style={{ color: '#c0392b', fontSize: 13 }}>⚠ {profileError}</p>}
-        {syncMessage && <p style={{ color: '#3F6B52', fontSize: 13 }}>✓ {syncMessage}</p>}
-
-        {!profileLoading && profile && !editingProfile && (
-          <>
-            <div className="profile-summary">
-              <div className="profile-stat">
-                <span className="profile-stat-label">Asset Type</span>
-                <span className="profile-stat-value">{profile.assetType}</span>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Pipe Material</span>
-                <span className="profile-stat-value">{profile.pipeMaterial}</span>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Class Location</span>
-                <span className="profile-stat-value">{profile.classLocation ? `Class ${profile.classLocation}` : 'Not set'}</span>
-              </div>
-              {profile.hasWeldedPiping && (
-                <div className="profile-stat">
-                  <span className="profile-stat-label">Welder Requal Path</span>
-                  <span className="profile-stat-value">{profile.welderRequalPath || 'Not set'}</span>
-                </div>
-              )}
-            </div>
-            <div className="profile-chip-grid">
-              {PROFILE_TOGGLES.map(([field, label]) => (
-                <div key={field} className={`profile-chip ${profile[field] ? 'on' : ''}`}>
-                  <span className="profile-chip-dot"></span>
-                  {label}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {!profileLoading && profile && editingProfile && (
-          <div>
-            <div className="init-form-row" style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-              <div className="init-form-group" style={{ flex: 1 }}>
-                <label className="init-label">Asset Type</label>
-                <select name="assetType" className="init-select" value={profileForm.assetType} onChange={handleProfileFieldChange}>
-                  <option value="Transmission">Transmission</option>
-                  <option value="Distribution">Distribution</option>
-                  <option value="Both">Both</option>
-                </select>
-              </div>
-              <div className="init-form-group" style={{ flex: 1 }}>
-                <label className="init-label">Pipe Material</label>
-                <select name="pipeMaterial" className="init-select" value={profileForm.pipeMaterial} onChange={handleProfileFieldChange}>
-                  <option value="Steel">Steel</option>
-                  <option value="Plastic">Plastic</option>
-                  <option value="Both">Both</option>
-                </select>
-              </div>
-              <div className="init-form-group" style={{ flex: 1 }}>
-                <label className="init-label">Class Location</label>
-                <select name="classLocation" className="init-select" value={profileForm.classLocation || ''} onChange={handleProfileFieldChange}>
-                  <option value="">Select...</option>
-                  <option value="1">Class 1</option>
-                  <option value="2">Class 2</option>
-                  <option value="3">Class 3</option>
-                  <option value="4">Class 4</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="init-checkbox-group">
-              {PROFILE_TOGGLES.map(([field, label]) => (
-                <label className="init-checkbox-row" key={field}>
-                  <input type="checkbox" name={field} checked={Boolean(profileForm[field])} onChange={handleProfileFieldChange} />
-                  <span className="init-checkbox-box"></span>
-                  <span className="init-checkbox-copy">
-                    <span className="init-checkbox-title">{label}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            {profileForm.hasWeldedPiping && (
-              <div className="init-form-group" style={{ marginTop: 10 }}>
-                <label className="init-label">Welder Re-qualification Path</label>
-                <select name="welderRequalPath" className="init-select" value={profileForm.welderRequalPath || ''} onChange={handleProfileFieldChange}>
-                  <option value="">Select a path...</option>
-                  <option value="destructive_test_path">Destructive/non-destructive re-test (twice yearly)</option>
-                  <option value="annual_path">Annual re-qualification (once yearly)</option>
-                </select>
-              </div>
-            )}
-
-            <div className="action-buttons" style={{ marginTop: 14 }}>
-              <button className="action-button save" onClick={handleSaveProfile} disabled={savingProfile}>
-                {savingProfile ? 'SAVING…' : 'SAVE'}
-              </button>
-              <button className="action-button cancel" onClick={() => { setEditingProfile(false); setProfileForm(profile); }}>
-                CANCEL
-              </button>
-            </div>
-          </div>
-        )}
-        </div>
+    <div className="settings-page">
+      <div className="settings-header">
+        <h2>System Settings</h2>
+        {/* <p className="settings-subtitle">
+          Everything entered during setup, in one place — view, edit, or remove it.
+        </p> */}
       </div>
 
+      {/* ---- Pipeline Profile ---- */}
+      <div className="settings-section-label">
+        Pipeline profile
+        {!profileLoading && profile && !editingProfile && (
+          <span className="settings-section-actions">
+            <button className="settings-edit-btn" onClick={() => setEditingProfile(true)}>
+              <i className="fas fa-user-edit"></i> Edit
+            </button>
+          </span>
+        )}
+      </div>
+
+      {profileLoading && <p className="settings-loading">Loading profile…</p>}
+      {profileError && <p className="settings-error">⚠ {profileError}</p>}
+      {syncMessage && <p className="settings-success">✓ {syncMessage}</p>}
+
+      {!profileLoading && profile && !editingProfile && (
+        <>
+          <div className="profile-readout">
+            <div className="profile-readout-stat">
+              <span className="profile-readout-label">Asset type</span>
+              <span className="profile-readout-value">{profile.assetType}</span>
+            </div>
+            <div className="profile-readout-stat">
+              <span className="profile-readout-label">Pipe material</span>
+              <span className="profile-readout-value">{profile.pipeMaterial}</span>
+            </div>
+            <div className="profile-readout-stat">
+              <span className="profile-readout-label">Class location</span>
+              <span className="profile-readout-value">{profile.classLocation ? `Class ${profile.classLocation}` : 'Not set'}</span>
+            </div>
+            {profile.hasWeldedPiping && (
+              <div className="profile-readout-stat">
+                <span className="profile-readout-label">Welder requal path</span>
+                <span className="profile-readout-value">{profile.welderRequalPath || 'Not set'}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="profile-toggle-grid">
+            {PROFILE_TOGGLES.map(([field, label]) => (
+              <div key={field} className={`profile-toggle${profile[field] ? ' is-on' : ''}`}>
+                <span className="profile-toggle-dot"></span>
+                {label}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!profileLoading && profile && editingProfile && (
+        <div>
+          <div className="profile-edit-row">
+            <div className="profile-edit-field">
+              <label className="profile-edit-label">Asset type</label>
+              <select name="assetType" className="settings-select" value={profileForm.assetType} onChange={handleProfileFieldChange}>
+                <option value="Transmission">Transmission</option>
+                <option value="Distribution">Distribution</option>
+                <option value="Both">Both</option>
+              </select>
+            </div>
+            <div className="profile-edit-field">
+              <label className="profile-edit-label">Pipe material</label>
+              <select name="pipeMaterial" className="settings-select" value={profileForm.pipeMaterial} onChange={handleProfileFieldChange}>
+                <option value="Steel">Steel</option>
+                <option value="Plastic">Plastic</option>
+                <option value="Both">Both</option>
+              </select>
+            </div>
+            <div className="profile-edit-field">
+              <label className="profile-edit-label">Class location</label>
+              <select name="classLocation" className="settings-select" value={profileForm.classLocation || ''} onChange={handleProfileFieldChange}>
+                <option value="">Select…</option>
+                <option value="1">Class 1</option>
+                <option value="2">Class 2</option>
+                <option value="3">Class 3</option>
+                <option value="4">Class 4</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="profile-checkbox-grid">
+            {PROFILE_TOGGLES.map(([field, label]) => (
+              <label className="profile-checkbox-row" key={field}>
+                <input type="checkbox" name={field} checked={Boolean(profileForm[field])} onChange={handleProfileFieldChange} />
+                {label}
+              </label>
+            ))}
+          </div>
+
+          {profileForm.hasWeldedPiping && (
+            <div className="profile-edit-field" style={{ maxWidth: 320, marginBottom: 20 }}>
+              <label className="profile-edit-label">Welder re-qualification path</label>
+              <select name="welderRequalPath" className="settings-select" value={profileForm.welderRequalPath || ''} onChange={handleProfileFieldChange}>
+                <option value="">Select a path…</option>
+                <option value="destructive_test_path">Destructive/non-destructive re-test (twice yearly)</option>
+                <option value="annual_path">Annual re-qualification (once yearly)</option>
+              </select>
+            </div>
+          )}
+
+          <div className="settings-form-actions">
+            <button className="settings-save-btn" onClick={handleSaveProfile} disabled={savingProfile}>
+              {savingProfile ? 'Saving…' : 'Save changes'}
+            </button>
+            <button className="settings-cancel-btn" onClick={() => { setEditingProfile(false); setProfileForm(profile); }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ---- Contacts ---- */}
-      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 16 }}>
-        <div className="settings-section-header"><div className="card-label">CONTACTS</div></div>
-        {contactError && <p style={{ color: '#c0392b', fontSize: 13, padding: '8px 16px 0' }}>⚠ {contactError}</p>}
-        <table>
+      <div className="settings-section-label">Contacts</div>
+      {contactError && <p className="settings-error">⚠ {contactError}</p>}
+      <div className="settings-table-wrap">
+        <table className="settings-table">
           <thead>
             <tr><th>Level</th><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th></th></tr>
           </thead>
           <tbody>
             {contacts.length === 0 ? (
-              <tr><td colSpan="6" style={{ padding: 16, opacity: 0.7 }}>No contacts yet.</td></tr>
+              <tr><td colSpan="6" className="settings-empty-cell">No contacts yet.</td></tr>
             ) : contacts.map((c) => (
               editingContactId === c._id ? (
-                <tr key={c._id}>
-                  <td><input className="table-input" type="number" min="1" value={contactDraft.escalationLevel} onChange={(e) => setContactDraft({ ...contactDraft, escalationLevel: e.target.value })} style={{ width: 50 }} /></td>
-                  <td><input className="table-input" value={contactDraft.fullName} onChange={(e) => setContactDraft({ ...contactDraft, fullName: e.target.value })} /></td>
-                  <td><input className="table-input" value={contactDraft.title} onChange={(e) => setContactDraft({ ...contactDraft, title: e.target.value })} /></td>
-                  <td><input className="table-input" value={contactDraft.email} onChange={(e) => setContactDraft({ ...contactDraft, email: e.target.value })} /></td>
-                  <td><input className="table-input" value={contactDraft.phone} onChange={(e) => setContactDraft({ ...contactDraft, phone: e.target.value })} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="action-button save" style={{ padding: '4px 8px' }} onClick={handleSaveContact}>SAVE</button>{' '}
-                    <button className="action-button cancel" style={{ padding: '4px 8px' }} onClick={cancelEditContact}>CANCEL</button>
+                <tr key={c._id} className="is-editing">
+                  <td>
+                    <input
+                      className="settings-table-input"
+                      type="number"
+                      min="1"
+                      value={contactDraft.escalationLevel}
+                      onChange={(e) => setContactDraft({ ...contactDraft, escalationLevel: e.target.value })}
+                    />
+                  </td>
+                  <td><input className="settings-table-input" value={contactDraft.fullName} onChange={(e) => setContactDraft({ ...contactDraft, fullName: e.target.value })} /></td>
+                  <td><input className="settings-table-input" value={contactDraft.title} onChange={(e) => setContactDraft({ ...contactDraft, title: e.target.value })} /></td>
+                  <td><input className="settings-table-input" value={contactDraft.email} onChange={(e) => setContactDraft({ ...contactDraft, email: e.target.value })} /></td>
+                  <td><input className="settings-table-input" value={contactDraft.phone} onChange={(e) => setContactDraft({ ...contactDraft, phone: e.target.value })} /></td>
+                  <td className="settings-row-actions">
+                    <button className="settings-row-save" onClick={handleSaveContact}>Save</button>
+                    <button className="settings-row-cancel" onClick={cancelEditContact}>Cancel</button>
                   </td>
                 </tr>
               ) : (
@@ -327,11 +334,11 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
                   <td>{c.escalationLevel}</td>
                   <td>{c.fullName}</td>
                   <td>{c.title}</td>
-                  <td>{c.email}</td>
-                  <td>{c.phone}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="row-icon-btn" onClick={() => startEditContact(c)} aria-label="Edit"><i className="fas fa-pen"></i></button>{' '}
-                    <button className="row-icon-btn danger" onClick={() => handleDeleteContact(c._id)} aria-label="Delete"><i className="fas fa-trash"></i></button>
+                  <td className="is-mono">{c.email}</td>
+                  <td className="is-mono">{c.phone}</td>
+                  <td className="settings-row-actions">
+                    <button className="settings-icon-btn" onClick={() => startEditContact(c)} aria-label="Edit"><i className="fas fa-pen"></i></button>
+                    <button className="settings-icon-btn danger" onClick={() => handleDeleteContact(c._id)} aria-label="Delete"><i className="fas fa-trash"></i></button>
                   </td>
                 </tr>
               )
@@ -341,45 +348,49 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
       </div>
 
       {/* ---- Vendors ---- */}
-      <div className="ledger-scroll" style={{ height: 'auto', marginTop: 16, marginBottom: 24 }}>
-        <div className="settings-section-header"><div className="card-label">VENDORS</div></div>
-        {vendorError && <p style={{ color: '#c0392b', fontSize: 13, padding: '8px 16px 0' }}>⚠ {vendorError}</p>}
-        <table>
+      <div className="settings-section-label">Vendors</div>
+      {vendorError && <p className="settings-error">⚠ {vendorError}</p>}
+      <div className="settings-table-wrap" style={{ marginBottom: 24 }}>
+        <table className="settings-table">
           <thead>
-            <tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Service Scope</th><th>Portal Access</th><th></th></tr>
+            <tr><th>Company</th><th>Contact person</th><th>Email</th><th>Phone</th><th>Service scope</th><th>Portal access</th><th></th></tr>
           </thead>
           <tbody>
             {vendorList.length === 0 ? (
-              <tr><td colSpan="7" style={{ padding: 16, opacity: 0.7 }}>No vendors yet.</td></tr>
+              <tr><td colSpan="7" className="settings-empty-cell">No vendors yet.</td></tr>
             ) : vendorList.map((v) => (
               editingVendorId === v._id ? (
-                <tr key={v._id}>
-                  <td><input className="table-input" value={vendorDraft.companyName} onChange={(e) => setVendorDraft({ ...vendorDraft, companyName: e.target.value })} /></td>
-                  <td><input className="table-input" value={vendorDraft.personnelName} onChange={(e) => setVendorDraft({ ...vendorDraft, personnelName: e.target.value })} /></td>
-                  <td><input className="table-input" value={vendorDraft.email} onChange={(e) => setVendorDraft({ ...vendorDraft, email: e.target.value })} /></td>
-                  <td><input className="table-input" value={vendorDraft.phone} onChange={(e) => setVendorDraft({ ...vendorDraft, phone: e.target.value })} /></td>
-                  <td><input className="table-input" value={vendorDraft.serviceScope} onChange={(e) => setVendorDraft({ ...vendorDraft, serviceScope: e.target.value })} /></td>
-                  <td style={{ textAlign: 'center' }}>
+                <tr key={v._id} className="is-editing">
+                  <td><input className="settings-table-input" value={vendorDraft.companyName} onChange={(e) => setVendorDraft({ ...vendorDraft, companyName: e.target.value })} /></td>
+                  <td><input className="settings-table-input" value={vendorDraft.personnelName} onChange={(e) => setVendorDraft({ ...vendorDraft, personnelName: e.target.value })} /></td>
+                  <td><input className="settings-table-input" value={vendorDraft.email} onChange={(e) => setVendorDraft({ ...vendorDraft, email: e.target.value })} /></td>
+                  <td><input className="settings-table-input" value={vendorDraft.phone} onChange={(e) => setVendorDraft({ ...vendorDraft, phone: e.target.value })} /></td>
+                  <td><input className="settings-table-input" value={vendorDraft.serviceScope} onChange={(e) => setVendorDraft({ ...vendorDraft, serviceScope: e.target.value })} /></td>
+                  <td className="is-center">
                     <input type="checkbox" checked={Boolean(vendorDraft.hasPortalAccess)} onChange={(e) => setVendorDraft({ ...vendorDraft, hasPortalAccess: e.target.checked })} />
                   </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="action-button save" style={{ padding: '4px 8px' }} onClick={handleSaveVendor}>SAVE</button>{' '}
-                    <button className="action-button cancel" style={{ padding: '4px 8px' }} onClick={cancelEditVendor}>CANCEL</button>
+                  <td className="settings-row-actions">
+                    <button className="settings-row-save" onClick={handleSaveVendor}>Save</button>
+                    <button className="settings-row-cancel" onClick={cancelEditVendor}>Cancel</button>
                   </td>
                 </tr>
               ) : (
                 <tr key={v._id}>
                   <td>{v.companyName}</td>
                   <td>{v.personnelName}</td>
-                  <td>{v.email}</td>
-                  <td>{v.phone}</td>
+                  <td className="is-mono">{v.email}</td>
+                  <td className="is-mono">{v.phone}</td>
                   <td>{v.serviceScope}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    {v.hasPortalAccess ? <span className="profile-chip on" style={{ display: 'inline-flex' }}><span className="profile-chip-dot"></span>Granted</span> : <span style={{ opacity: 0.5, fontSize: 12 }}>Not granted</span>}
+                  <td className="is-center">
+                    {v.hasPortalAccess ? (
+                      <span className="settings-access-chip">Granted</span>
+                    ) : (
+                      <span className="settings-access-muted">Not granted</span>
+                    )}
                   </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="row-icon-btn" onClick={() => startEditVendor(v)} aria-label="Edit"><i className="fas fa-pen"></i></button>{' '}
-                    <button className="row-icon-btn danger" onClick={() => handleDeleteVendor(v._id)} aria-label="Delete"><i className="fas fa-trash"></i></button>
+                  <td className="settings-row-actions">
+                    <button className="settings-icon-btn" onClick={() => startEditVendor(v)} aria-label="Edit"><i className="fas fa-pen"></i></button>
+                    <button className="settings-icon-btn danger" onClick={() => handleDeleteVendor(v._id)} aria-label="Delete"><i className="fas fa-trash"></i></button>
                   </td>
                 </tr>
               )
@@ -387,7 +398,7 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
           </tbody>
         </table>
       </div>
-    </>
+    </div>
   );
 };
 
