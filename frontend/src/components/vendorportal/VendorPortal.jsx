@@ -17,10 +17,11 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import './VendorPortal.css';
-import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, getEvidenceBlobUrl, getVendorProfile, saveVendorProfile } from '../../api/client';
+import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, getEvidenceBlobUrl, getVendorProfile, saveVendorProfile, requestDueDate, getVendorRequests } from '../../api/client';
 import VendorOnboarding from './VendorOnboarding';
 import MarketplacePage from './MarketplacePage';
 import RequestsPage from './RequestsPage';
+import VendorNotificationBanner from './VendorNotificationBanner';
 import CompanyLogo from "../../assets/gm_edited-removebg-preview.jpg";
 
 const evidenceLabel = (entry) => (typeof entry === 'string' ? entry : entry.originalName);
@@ -67,6 +68,23 @@ const VendorPortal = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Counts for the sidebar notification banner below - re-fetched on every
+  // in-portal navigation (not just on mount) so acting on something in
+  // Requests clears the count the moment you leave that page, without
+  // having to prop-drill a refresh callback through the router.
+  const [requestCounts, setRequestCounts] = useState({ pendingReceived: 0, readyToStart: 0 });
+  useEffect(() => {
+    getVendorRequests()
+      .then((data) => {
+        const reqs = data.requests || [];
+        setRequestCounts({
+          pendingReceived: reqs.filter((r) => r.initiatedBy === 'operator' && r.status === 'pending').length,
+          readyToStart: reqs.filter((r) => r.initiatedBy === 'vendor' && r.status === 'accepted' && r.complianceItemId && !r.collaborationRequestedAt).length,
+        });
+      })
+      .catch((err) => console.error('[VendorPortal] getVendorRequests failed:', err));
+  }, [location.pathname]);
 
   const fetchAll = () => {
     setLoading(true);
@@ -245,6 +263,11 @@ const VendorPortal = () => {
             <div className="vp-me-email">{me.email}</div>
           </div>
         )}
+        <VendorNotificationBanner
+          pendingReceived={requestCounts.pendingReceived}
+          readyToStart={requestCounts.readyToStart}
+          onClick={() => goTo('/vendor/requests')}
+        />
         <nav className="vp-nav">
           <a href="/vendor" onClick={(e) => { e.preventDefault(); goTo('/vendor'); }}>
             <i className="fas fa-list-check" aria-hidden="true"></i><span>MY TASKS</span>
@@ -282,6 +305,62 @@ const VendorPortal = () => {
         )}
       </main>
     </div>
+  );
+};
+
+// A task with no due date isn't broken - it means the operator hasn't set
+// a real baseline last-completed date yet (see
+// backend/services/baselineScheduling.js: no fake placeholder is ever
+// shown). Rather than leave a vendor staring at a blank "Due —", this says
+// so plainly and lets them nudge the operator directly by email.
+const DueDateStatus = ({ task }) => {
+  const [requesting, setRequesting] = useState(false);
+  const [requested, setRequested] = useState(false);
+  const [error, setError] = useState('');
+
+  if (task.nextDueDate) {
+    return <span>Due {formatDate(task.nextDueDate)}</span>;
+  }
+
+  const handleRequest = async () => {
+    setRequesting(true);
+    setError('');
+    try {
+      await requestDueDate(task._id);
+      setRequested(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+      <span style={{ color: '#c98a1e', fontWeight: 600 }}>⚠ Due date not set yet</span>
+      {requested ? (
+        <span style={{ color: '#3f6b52', fontWeight: 500 }}>✓ Operator notified</span>
+      ) : (
+        <button
+          type="button"
+          onClick={handleRequest}
+          disabled={requesting}
+          style={{
+            background: 'none',
+            border: '1px solid #dce1e8',
+            color: '#2c3e50',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            padding: '3px 10px',
+            borderRadius: '10px',
+          }}
+        >
+          {requesting ? 'Sending…' : 'Ask operator to set it'}
+        </button>
+      )}
+      {error && <span style={{ color: '#b91c1c', fontSize: '11px' }}>⚠ {error}</span>}
+    </span>
   );
 };
 
@@ -444,8 +523,35 @@ const VendorTaskDetail = ({ task, onBack, onUpdate, onUploadEvidence }) => {
     >
       <span style={{ fontWeight: 500 }}>{task.operatorCompanyName}</span>
       <span style={{ color: '#dce1e8' }}>·</span>
-      <span>Due {formatDate(task.nextDueDate)}</span>
+      <DueDateStatus task={task} />
     </p>
+
+    {/* Timeline & reminders - same reminderCheckpoints the operator's own
+        RequirementDetail.jsx shows, resolved server-side (see
+        backend/routes/vendorPortal/getTasks.js) so this never duplicates
+        date math. */}
+    {task.status === 'due' && task.reminderCheckpoints?.length > 0 && (
+      <div
+        style={{
+          backgroundColor: '#fef9e7',
+          borderRadius: '10px',
+          border: '1px solid #f5e6b8',
+          padding: '12px 16px',
+          marginBottom: '16px',
+        }}
+      >
+        <div style={{ fontSize: '11px', fontWeight: 700, color: '#8a6d1a', letterSpacing: '0.3px', marginBottom: '6px' }}>
+          REMINDER TIMELINE
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          {task.reminderCheckpoints.map((cp, i) => (
+            <span key={i} style={{ fontSize: '12px', color: '#4a5568' }}>
+              {formatDate(cp)}{i < task.reminderCheckpoints.length - 1 ? ' ·' : ''}
+            </span>
+          ))}
+        </div>
+      </div>
+    )}
 
     {/* Error message */}
     {error && (

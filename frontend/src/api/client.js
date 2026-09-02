@@ -76,6 +76,10 @@ export const identify = (intendedRole) => request('/auth/identify', { method: 'P
 export const getVendorMe = () => request('/vendor-portal/me');
 export const getVendorTasks = () => request('/vendor-portal/tasks');
 export const updateVendorTask = (id, payload) => request(`/vendor-portal/tasks/${id}`, { method: 'PATCH', body: payload });
+// Nudges the operator by email when an assigned task has no due date yet
+// (the operator hasn't set a baseline last-completed date) - see
+// backend/routes/vendorPortal/requestDueDate.js.
+export const requestDueDate = (id) => request(`/vendor-portal/tasks/${id}/request-due-date`, { method: 'POST' });
 export const uploadVendorEvidence = (id, files) => {
   const formData = new FormData();
   files.forEach((f) => formData.append('files', f));

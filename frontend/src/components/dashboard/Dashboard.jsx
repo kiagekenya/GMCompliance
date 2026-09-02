@@ -680,7 +680,7 @@ const ConnectionRequestRow = ({ request, onRespond, onConfirmCollaboration }) =>
   );
 };
 
-const ConnectionRequestsSection = () => {
+const ConnectionRequestsSection = ({ onRequestsChanged }) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -698,11 +698,13 @@ const ConnectionRequestsSection = () => {
   const handleRespond = async (id, status) => {
     await respondToOperatorRequest(id, status);
     fetchRequests();
+    if (onRequestsChanged) onRequestsChanged();
   };
 
   const handleConfirmCollaboration = async (id) => {
     await confirmCollaboration(id);
     fetchRequests();
+    if (onRequestsChanged) onRequestsChanged();
   };
 
   const pending = requests.filter((r) => r.status === 'pending');
@@ -788,11 +790,22 @@ const ComplianceDashboard = ({ configData }) => {
       .catch((err) => console.error('[Dashboard] listVendors failed:', err));
   };
 
+  // Fetched at this top level (not just inside ConnectionRequestsSection on
+  // the Vendors page) so the sidebar notification bell below can surface
+  // vendor-request activity no matter which page is currently open.
+  const [vendorRequests, setVendorRequests] = useState([]);
+  const fetchVendorRequests = () => {
+    getOperatorRequests()
+      .then((data) => setVendorRequests((data.requests || []).filter((r) => r.initiatedBy === 'vendor')))
+      .catch((err) => console.error('[Dashboard] getOperatorRequests failed:', err));
+  };
+
   useEffect(() => {
     fetchItems();
     fetchContacts();
     fetchVendors();
     fetchArchive();
+    fetchVendorRequests();
   }, []);
 
   const CATEGORIES = useMemo(() => {
@@ -802,6 +815,12 @@ const ComplianceDashboard = ({ configData }) => {
   }, [requirements]);
 
   const needsReviewItems = useMemo(() => requirements.filter((r) => r.needsReview), [requirements]);
+  const pendingVendorRequests = useMemo(() => vendorRequests.filter((r) => r.status === 'pending'), [vendorRequests]);
+  const readyToConfirmRequests = useMemo(
+    () => vendorRequests.filter((r) => r.status === 'accepted' && r.complianceItemId && r.collaborationRequestedAt && !r.collaborationConfirmedAt),
+    [vendorRequests]
+  );
+  const totalNotifications = needsReviewItems.length + pendingVendorRequests.length + readyToConfirmRequests.length;
 
   const handleRequirementUpdate = async (id, updates) => {
     try {
@@ -1072,6 +1091,7 @@ const ComplianceDashboard = ({ configData }) => {
         onUploadEvidence={handleUploadEvidence}
         vendorList={vendorList}
         contactList={contacts}
+        onGoToBaselineSettings={() => navigate('/dashboard/settings')}
       />
     );
   };
@@ -1301,7 +1321,7 @@ const ComplianceDashboard = ({ configData }) => {
     <FindVendorsSection vendorList={vendorList} onVendorAdded={fetchVendors} />
 
     
-    <ConnectionRequestsSection />
+    <ConnectionRequestsSection onRequestsChanged={fetchVendorRequests} />
   </div>
 );
 
@@ -1315,29 +1335,56 @@ const ComplianceDashboard = ({ configData }) => {
         <div className="operator-section" style={{ position: 'relative' }}>
           <div className="operator-label">OPERATOR</div>
           <div className="operator-name">{configData?.operatorName || 'Yunoya LTD'}</div>
-          {needsReviewItems.length > 0 && (
+          {totalNotifications > 0 && (
             <button
               type="button"
               onClick={() => setShowReviewPopover((v) => !v)}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2b7a4b', fontSize: 12, padding: 0, marginTop: 6 }}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2b7a4b', fontSize: 12, fontWeight: 700, padding: 0, marginTop: 6 }}
             >
-              🔔 {needsReviewItems.length} need{needsReviewItems.length === 1 ? 's' : ''} review
+              🔔 {totalNotifications} notification{totalNotifications === 1 ? '' : 's'}
             </button>
           )}
           {showReviewPopover && (
-            <div className="category-breakdown-dropdown category-breakdown-dropdown--floating" style={{ position: 'absolute', top: '100%', left: 0, zIndex: 20, minWidth: 240 }}>
+            <div className="category-breakdown-dropdown category-breakdown-dropdown--floating" style={{ position: 'absolute', top: '100%', left: 0, zIndex: 20, minWidth: 260 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <strong style={{ fontSize: 12 }}>NEEDS REVIEW</strong>
+                <strong style={{ fontSize: 12 }}>NOTIFICATIONS</strong>
                 <button type="button" onClick={() => setShowReviewPopover(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }} aria-label="Close">✕</button>
               </div>
+
+              {needsReviewItems.length === 0 && pendingVendorRequests.length === 0 && readyToConfirmRequests.length === 0 && (
+                <p style={{ fontSize: 12, opacity: 0.7, margin: '6px 0' }}>Nothing needs your attention.</p>
+              )}
+
               {needsReviewItems.map((item) => (
                 <button
-                  key={item.id}
+                  key={`review-${item.id}`}
                   type="button"
                   onClick={() => { setShowReviewPopover(false); navigate(`/dashboard/requirement/${item.id}`); }}
                   style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', padding: '6px 0', fontSize: 12 }}
                 >
-                  📎 {item.description}
+                  📎 Evidence to review: {item.description}
+                </button>
+              ))}
+
+              {pendingVendorRequests.map((r) => (
+                <button
+                  key={`pending-${r._id}`}
+                  type="button"
+                  onClick={() => { setShowReviewPopover(false); navigate('/dashboard/vendors'); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', padding: '6px 0', fontSize: 12 }}
+                >
+                  🤝 Request needs a response: {r.vendorUserId?.fullName || r.vendorUserId?.email || 'a vendor'}
+                </button>
+              ))}
+
+              {readyToConfirmRequests.map((r) => (
+                <button
+                  key={`confirm-${r._id}`}
+                  type="button"
+                  onClick={() => { setShowReviewPopover(false); navigate('/dashboard/vendors'); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', padding: '6px 0', fontSize: 12 }}
+                >
+                  ✅ Ready to confirm collaboration: {r.complianceItemId?.requirementId?.title || 'a regulation'}
                 </button>
               ))}
             </div>

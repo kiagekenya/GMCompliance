@@ -17,6 +17,7 @@ const ComplianceItem = require('../../models/ComplianceItem');
 const Vendor = require('../../models/Vendor');
 const VendorUser = require('../../models/VendorUser');
 const RegulatoryRequirement = require('../../models/RegulatoryRequirement');
+const { computeReminderCheckpoints } = require('../../utils/dateMath');
 const { sendEmail } = require('../../services/emailService');
 const asyncHandler = require('../../utils/asyncHandler');
 
@@ -61,18 +62,34 @@ const confirmCollaboration = asyncHandler(async (req, res) => {
   if (vendorRecord.email) {
     const requirement = await RegulatoryRequirement.findById(item.requirementId);
     const uploadLink = `${process.env.FRONTEND_ORIGIN || 'http://localhost:3000'}/upload/${item.uploadToken}`;
-    const dueText = item.nextDueDate ? new Date(item.nextDueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'not yet set';
+
+    // No fake placeholder here either (see baselineScheduling.js) - if the
+    // operator hasn't set a real baseline date yet, say so plainly instead
+    // of a blank/misleading due date, and give the vendor a path forward
+    // (they can ask from their task page - routes/vendorPortal/requestDueDate.js).
+    let scheduleText;
+    if (item.nextDueDate) {
+      const dueText = new Date(item.nextDueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const checkpoints = computeReminderCheckpoints(item.nextDueDate, item.actionWindowMonths);
+      const reminderText = checkpoints.length > 0
+        ? checkpoints.map((d) => `  - ${d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`).join('\n')
+        : '  (none scheduled yet)';
+      scheduleText = `Due: ${dueText}\n\nYou'll be reminded starting on these dates:\n${reminderText}`;
+    } else {
+      scheduleText = "Due date: not yet set - the operator hasn't entered when this was last actually done. You can ask them to set it from this task's page in your Vendor Portal.";
+    }
 
     const result = await sendEmail({
       to: vendorRecord.email,
       subject: `Collaboration confirmed: ${requirement?.title || 'a compliance task'}`,
       text: `Hi ${vendorRecord.personnelName || vendorRecord.companyName || ''},
 
-Your collaboration has been confirmed. You're now assigned to:
+The operator confirmed the collaboration - you're now the assignee for:
 
   ${requirement?.title || 'Requirement'}
   ${requirement?.sourceRegulation || ''}
-  Due: ${dueText}
+
+${scheduleText}
 
 When you've completed this, please upload your evidence here:
   ${uploadLink}

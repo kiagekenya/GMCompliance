@@ -53,7 +53,7 @@ const EvidenceRow = ({ entry, idx, onView, viewing, onRemove }) => (
   </div>
 );
 
-const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUploadEvidence, vendorList = [], contactList = [] }) => {
+const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUploadEvidence, vendorList = [], contactList = [], onGoToBaselineSettings }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [viewingKey, setViewingKey] = useState(null);
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
@@ -100,6 +100,12 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
   const [addingContact, setAddingContact] = useState(false);
 
   const needsFrequency = requirement.requiresOperatorInput && !requirement.frequencyValue;
+  // The interval is known, but no due date has ever been calculated - the
+  // operator hasn't entered a real baseline last-completed date yet (see
+  // backend/services/baselineScheduling.js: no fake placeholder is shown
+  // instead). Worth flagging loudly once someone is actually assigned to
+  // this and waiting on it.
+  const needsBaselineDate = !needsFrequency && !requirement.nextDue;
   const [frequencyInput, setFrequencyInput] = useState('');
   const [savingFrequency, setSavingFrequency] = useState(false);
 
@@ -248,6 +254,24 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
               {savingFrequency ? 'SAVING…' : 'SET INTERVAL'}
             </button>
           </div>
+        </div>
+      )}
+
+      {needsBaselineDate && (
+        <div className="detail-card detail-banner detail-banner--warning">
+          <div className="card-label">⚠ No due date set yet</div>
+          <p>
+            {hasOwner
+              ? `${requirement.assigned} is assigned to this but has no due date to work from yet. `
+              : ''}
+            Enter the date this was actually last done in Settings &gt; Baseline last-completed dates -
+            that's what calculates a real due date and reminder schedule instead of leaving it blank.
+          </p>
+          {onGoToBaselineSettings && (
+            <button type="button" className="action-button save" onClick={onGoToBaselineSettings}>
+              GO SET IT
+            </button>
+          )}
         </div>
       )}
 
