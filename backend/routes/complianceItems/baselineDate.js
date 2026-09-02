@@ -13,6 +13,11 @@ const ComplianceItem = require('../../models/ComplianceItem');
 const { proposeBaseline, confirmBaseline, clearBaseline } = require('../../services/baselineScheduling');
 const asyncHandler = require('../../utils/asyncHandler');
 
+// Same shape getItems.js sends - the frontend list (BaselineDates.jsx)
+// reads item.requirementId.title, so every response here has to populate
+// it the same way or the title silently falls back to "Untitled requirement".
+const REQUIREMENT_FIELDS = 'title category categoryName sourceRegulation description removable referenceUrl';
+
 async function findOwnedItem(req, res) {
   const item = await ComplianceItem.findOne({ _id: req.params.id, operatorId: req.operatorId });
   if (!item) {
@@ -20,6 +25,13 @@ async function findOwnedItem(req, res) {
     return null;
   }
   return item;
+}
+
+async function repopulate(id) {
+  return ComplianceItem.findById(id)
+    .populate('requirementId', REQUIREMENT_FIELDS)
+    .populate('assignedContactId', 'fullName title')
+    .populate('assignedVendorId', 'companyName personnelName');
 }
 
 const proposeBaselineDate = asyncHandler(async (req, res) => {
@@ -40,7 +52,7 @@ const proposeBaselineDate = asyncHandler(async (req, res) => {
 
   await item.save();
   console.log(`[compliance-items] operator ${req.operatorId}: proposed baseline date ${lastCompletedDate} on item ${item._id} -> proposed next due ${item.baselineProposedNextDueDate}`);
-  res.json(item);
+  res.json(await repopulate(item._id));
 });
 
 const confirmBaselineDate = asyncHandler(async (req, res) => {
@@ -55,11 +67,7 @@ const confirmBaselineDate = asyncHandler(async (req, res) => {
   }
 
   console.log(`[compliance-items] operator ${req.operatorId}: CONFIRMED baseline date on item ${item._id}, next due now ${item.nextDueDate}`);
-
-  const populated = await ComplianceItem.findById(item._id)
-    .populate('assignedContactId', 'fullName title')
-    .populate('assignedVendorId', 'companyName personnelName');
-  res.json(populated);
+  res.json(await repopulate(item._id));
 });
 
 const clearBaselineDate = asyncHandler(async (req, res) => {
@@ -69,7 +77,7 @@ const clearBaselineDate = asyncHandler(async (req, res) => {
   clearBaseline(item);
   await item.save();
   console.log(`[compliance-items] operator ${req.operatorId}: discarded baseline proposal on item ${item._id}`);
-  res.json(item);
+  res.json(await repopulate(item._id));
 });
 
 module.exports = { proposeBaselineDate, confirmBaselineDate, clearBaselineDate };

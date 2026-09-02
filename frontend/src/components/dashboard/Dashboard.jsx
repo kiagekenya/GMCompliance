@@ -7,6 +7,7 @@ import './Audit.css';
 import CompanyLogo from "../../../src/assets/gm_edited.jpg";
 import RequirementDetail from '../requirementdetail/RequirementDetail';
 import SettingsPage from '../settings/SettingsPage';
+import BaselineProgressBanner from './BaselineProgressBanner';
 import {
   getComplianceItems, completeComplianceItem, updateComplianceItem, setItemFrequency, setReminderDates,
   listContacts, addContact, getArchive, listVendors, runStatusCheck,
@@ -21,7 +22,7 @@ const mapStatusForDisplay = (backendStatus) => {
   if (backendStatus === 'due' || backendStatus === 'started') return 'due';
   if (backendStatus === 'compliant' || backendStatus === 'done') return 'compliant';
   if (backendStatus === 'pending') return 'pending';
-  if (backendStatus === 'awaiting_input') return 'needs setup';
+  if (backendStatus === 'awaiting_input' || backendStatus === 'awaiting_baseline') return 'needs setup';
   return '';
 };
 
@@ -1282,6 +1283,8 @@ const ComplianceDashboard = ({ configData }) => {
             </div>
           )}
         </div>
+
+        <BaselineProgressBanner items={requirements} onClick={() => navigate('/dashboard/settings')} />
 
         <nav className="sidebar-nav">
           <a href="/dashboard" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }}>
