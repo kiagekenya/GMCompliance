@@ -13,7 +13,7 @@ import {
   listContacts, addContact, getArchive, listVendors, runStatusCheck,
   uploadEvidence, acknowledgeReview, getEvidenceBlobUrl,
   getVendorDirectory, getOperatorRequests, respondToOperatorRequest, addVendorFromDirectory,
-  updateVendor, deleteVendor,
+  updateVendor, deleteVendor, confirmCollaboration,
 } from '../../api/client';
 
 // 'pending' is the honest default for a never-completed item.
@@ -597,14 +597,33 @@ const FindVendorsSection = ({ vendorList, onVendorAdded }) => {
 
 // One row in the connection-request inbox - shared shape for both "received
 // from vendors" (respondable) and "sent to vendors" (waiting) sections.
-const ConnectionRequestRow = ({ request, onRespond }) => {
+// Accepting only connects the two sides (see backend/utils/vendorLinking.js)
+// - for a regulation-specific offer, nothing is assigned on the calendar
+// until the vendor confirms they're ready to start (collaborationRequestedAt)
+// and this operator confirms back (collaborationConfirmedAt, via
+// onConfirmCollaboration) - see backend/routes/vendorDirectory/confirmCollaboration.js.
+const ConnectionRequestRow = ({ request, onRespond, onConfirmCollaboration }) => {
   const [responding, setResponding] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
   const vendorLabel = request.vendorUserId?.fullName || request.vendorUserId?.email || 'Unknown vendor';
   const regulation = request.complianceItemId?.requirementId;
 
   const respond = async (status) => {
     setResponding(true);
     try { await onRespond(request._id, status); } finally { setResponding(false); }
+  };
+
+  const confirmCollab = async () => {
+    setConfirming(true);
+    setConfirmError('');
+    try {
+      await onConfirmCollaboration(request._id);
+    } catch (err) {
+      setConfirmError(err.message);
+    } finally {
+      setConfirming(false);
+    }
   };
 
   return (
@@ -632,6 +651,31 @@ const ConnectionRequestRow = ({ request, onRespond }) => {
           </button>
         </div>
       )}
+
+      {request.status === 'accepted' && regulation && !request.collaborationConfirmedAt && (
+        <div className="connection-row-actions" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+          {confirmError && <span style={{ fontSize: 11, color: '#b91c1c' }}>⚠ {confirmError}</span>}
+          {request.collaborationRequestedAt ? (
+            <button
+              type="button"
+              className="connection-accept-btn"
+              onClick={confirmCollab}
+              disabled={confirming}
+              style={{ fontWeight: 700 }}
+            >
+              {confirming ? 'CONFIRMING…' : 'CONFIRM COLLABORATION'}
+            </button>
+          ) : (
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Waiting for {vendorLabel} to confirm they're ready to start.</span>
+          )}
+        </div>
+      )}
+
+      {request.status === 'accepted' && regulation && request.collaborationConfirmedAt && (
+        <p style={{ fontSize: 12, fontWeight: 600, color: '#3f6b52', margin: '4px 0 0' }}>
+          ✓ Collaboration confirmed — assigned on the calendar
+        </p>
+      )}
     </div>
   );
 };
@@ -656,18 +700,34 @@ const ConnectionRequestsSection = () => {
     fetchRequests();
   };
 
+  const handleConfirmCollaboration = async (id) => {
+    await confirmCollaboration(id);
+    fetchRequests();
+  };
+
+  const pending = requests.filter((r) => r.status === 'pending');
+  // The "inventory" of services this vendor is approved for: every
+  // regulation-specific request the operator has accepted, whatever stage
+  // of the start/confirm handshake it's currently at.
+  const acceptedServices = requests.filter((r) => r.status === 'accepted' && r.complianceItemId);
+
   return (
     <>
       <div className="settings-section-header"><div className="card-label">Requests from vendors</div></div>
-      {/* <p className="vendor-section-note">
-        Vendors offering to help with one of your specific regulations. Accepting adds them to your vendor list automatically.
-      </p> */}
       {loading && <p className="vendor-loading">Loading…</p>}
       {error && <p className="vendor-error">⚠ {error}</p>}
-      {!loading && !error && requests.length === 0 && <p className="connection-empty">Nothing yet.</p>}
-      {requests.length > 0 && (
+      {!loading && !error && pending.length === 0 && <p className="connection-empty">Nothing pending.</p>}
+      {pending.length > 0 && (
         <div className="connection-list">
-          {requests.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} />)}
+          {pending.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} onConfirmCollaboration={handleConfirmCollaboration} />)}
+        </div>
+      )}
+
+      <div className="settings-section-header" style={{ marginTop: 20 }}><div className="card-label">Accepted services</div></div>
+      {!loading && !error && acceptedServices.length === 0 && <p className="connection-empty">No vendor is approved for a specific regulation yet.</p>}
+      {acceptedServices.length > 0 && (
+        <div className="connection-list">
+          {acceptedServices.map((r) => <ConnectionRequestRow key={r._id} request={r} onRespond={handleRespond} onConfirmCollaboration={handleConfirmCollaboration} />)}
         </div>
       )}
     </>

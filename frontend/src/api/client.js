@@ -93,6 +93,9 @@ export const getVendorRequests = () => request('/vendor-portal/requests');
 // ("we can do this one for you") instead of a general inquiry.
 export const sendVendorRequest = (operatorId, message, complianceItemId) => request('/vendor-portal/requests', { method: 'POST', body: { operatorId, message, complianceItemId } });
 export const respondToVendorRequest = (id, status) => request(`/vendor-portal/requests/${id}`, { method: 'PATCH', body: { status } });
+// Second handshake after acceptance, only for a request tied to a specific
+// regulation - see backend/routes/vendorPortal/startCollaboration.js.
+export const startCollaboration = (id) => request(`/vendor-portal/requests/${id}/start-collaboration`, { method: 'POST' });
 
 // --- Vendor marketplace: operator side (browsing vendor profiles, and the
 // connection-request inbox - mirrors the vendor-side functions above) ---
@@ -104,6 +107,10 @@ export const getServiceCategories = () => request('/requirements/categories');
 export const getOperatorRequests = () => request('/vendor-directory/requests');
 export const sendOperatorRequest = (vendorUserId, message) => request('/vendor-directory/requests', { method: 'POST', body: { vendorUserId, message } });
 export const respondToOperatorRequest = (id, status) => request(`/vendor-directory/requests/${id}`, { method: 'PATCH', body: { status } });
+// Finalizes a collaboration the vendor has confirmed they're ready to start -
+// see backend/routes/vendorDirectory/confirmCollaboration.js. This is what
+// actually assigns the vendor on the ComplianceItem.
+export const confirmCollaboration = (id) => request(`/vendor-directory/requests/${id}/confirm-collaboration`, { method: 'POST' });
 
 // --- Pipeline profile ---
 export const getProfile = () => request('/profile');

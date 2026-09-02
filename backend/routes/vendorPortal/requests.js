@@ -9,6 +9,7 @@
 const ConnectionRequest = require('../../models/ConnectionRequest');
 const Operator = require('../../models/Operator');
 const ComplianceItem = require('../../models/ComplianceItem');
+const { sendEmail } = require('../../services/emailService');
 const asyncHandler = require('../../utils/asyncHandler');
 const { acceptConnectionRequest } = require('../../utils/connectionRequests');
 
@@ -31,10 +32,14 @@ const createRequest = asyncHandler(async (req, res) => {
   }
   // A referenced item, if any, must actually belong to this operator -
   // otherwise a vendor could tag an unrelated operator's regulation.
+  let regulationLabel = '';
   if (complianceItemId) {
-    const item = await ComplianceItem.findOne({ _id: complianceItemId, operatorId });
+    const item = await ComplianceItem.findOne({ _id: complianceItemId, operatorId }).populate('requirementId', 'title sourceRegulation');
     if (!item) {
       return res.status(422).json({ error: 'That regulation does not belong to this operator' });
+    }
+    if (item.requirementId) {
+      regulationLabel = `\n  Re: ${item.requirementId.title} (${item.requirementId.sourceRegulation})\n`;
     }
   }
 
@@ -45,6 +50,24 @@ const createRequest = asyncHandler(async (req, res) => {
     initiatedBy: 'vendor',
     message: message || '',
   });
+
+  if (operator.email) {
+    const result = await sendEmail({
+      to: operator.email,
+      subject: `${req.vendorUser.fullName || req.vendorUser.email} wants to collaborate with you`,
+      text: `Hi,
+
+${req.vendorUser.fullName || req.vendorUser.email} sent you a collaboration request on Galaxy Compliance Assistant:
+${regulationLabel}
+  "${message || '(no message)'}"
+
+Log in and open Vendors > Requests from vendors to accept or decline.
+
+- Galaxy Compliance Assistant
+`,
+    });
+    console.log(`[vendor-portal] request email to ${operator.email}: ${result.sent ? 'sent' : 'not sent (' + result.reason + ')'}`);
+  }
 
   res.status(201).json({ request });
 });

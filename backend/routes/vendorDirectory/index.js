@@ -11,6 +11,7 @@ const { requireAuth } = require('../../middleware/clerkAuth');
 const listVendorDirectory = require('./list');
 const addVendorFromDirectory = require('./addVendor');
 const { listRequests, createRequest, respondToRequest } = require('./requests');
+const confirmCollaboration = require('./confirmCollaboration');
 
 router.use(requireAuth);
 
@@ -19,5 +20,6 @@ router.post('/:vendorUserId/add', addVendorFromDirectory);
 router.get('/requests', listRequests);
 router.post('/requests', createRequest);
 router.patch('/requests/:id', respondToRequest);
+router.post('/requests/:id/confirm-collaboration', confirmCollaboration);
 
 module.exports = router;

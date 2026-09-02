@@ -9,7 +9,32 @@
 // exposed here (the item itself only, never internal contacts/evidence).
 
 import React, { useState, useEffect } from 'react';
-import { getMarketplaceOperators, sendVendorRequest } from '../../api/client';
+import { getMarketplaceOperators, sendVendorRequest, getVendorRequests } from '../../api/client';
+
+const REQUEST_STATUS_LABEL = { pending: '⏳ Pending', accepted: '✓ Accepted', declined: '✗ Declined' };
+const REQUEST_STATUS_COLOR = { pending: '#c98a1e', accepted: '#3f6b52', declined: '#94a3b8' };
+
+// Read-only badge for a request that already exists (of either kind) -
+// replaces the "Offer to help"/"Send a general inquiry" button once one has
+// actually been sent, instead of the button silently going back to its
+// initial state on every reload.
+const ExistingRequestBadge = ({ status }) => (
+  <span
+    style={{
+      fontSize: '11px',
+      fontWeight: 600,
+      color: REQUEST_STATUS_COLOR[status] || '#6b7280',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      padding: '4px 10px',
+      borderRadius: '12px',
+      background: status === 'accepted' ? '#edf7f2' : status === 'declined' ? '#f1f2f4' : '#fef9e7',
+    }}
+  >
+    {REQUEST_STATUS_LABEL[status] || status}
+  </span>
+);
 
 const STATUS_LABEL = {
   past_due: 'past due',
@@ -43,7 +68,7 @@ const formatDate = (dateString) => {
 // Offer to help with ONE specific regulation - the primary way to reach out
 // now. Sends a connection request tagged with that ComplianceItem's id, so
 // the operator sees exactly which regulation is being offered on.
-const RequestRowButton = ({ operatorId, complianceItemId, itemLabel }) => {
+const RequestRowButton = ({ operatorId, complianceItemId, itemLabel, existingRequest, onSent }) => {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -61,6 +86,7 @@ const RequestRowButton = ({ operatorId, complianceItemId, itemLabel }) => {
       );
       setSent(true);
       setOpen(false);
+      if (onSent) onSent();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -68,48 +94,31 @@ const RequestRowButton = ({ operatorId, complianceItemId, itemLabel }) => {
     }
   };
 
-  if (sent)
-    return (
-      <span
-        style={{
-          fontSize: '12px',
-          fontWeight: 600,
-          color: '#3f6b52',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '4px',
-        }}
-      >
-        <span style={{ fontSize: '14px' }}>✓</span> Sent
-      </span>
-    );
+  // A request already exists (sent just now, or on a prior visit) - show
+  // its real, persisted status instead of a button that would just send a
+  // duplicate.
+  if (sent || existingRequest) {
+    return <ExistingRequestBadge status={existingRequest?.status || 'pending'} />;
+  }
 
   if (!open)
     return (
       <button
         type="button"
         style={{
-          background: 'none',
+          background: '#2c3e50',
           border: 'none',
-          color: '#2c3e50',
+          color: '#ffffff',
           fontSize: '12px',
-          fontWeight: 500,
+          fontWeight: 600,
           cursor: 'pointer',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          transition: 'background 0.15s ease, color 0.15s ease',
-          textDecoration: 'underline',
-          textUnderlineOffset: '2px',
-          textDecorationColor: '#dce1e8',
+          padding: '7px 16px',
+          borderRadius: '6px',
+          letterSpacing: '0.3px',
+          transition: 'background-color 0.2s ease',
         }}
-        onMouseEnter={(e) => {
-          e.target.style.background = '#f0f2f5';
-          e.target.style.color = '#1a2634';
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.background = 'none';
-          e.target.style.color = '#2c3e50';
-        }}
+        onMouseEnter={(e) => { e.target.style.backgroundColor = '#1a2634'; }}
+        onMouseLeave={(e) => { e.target.style.backgroundColor = '#2c3e50'; }}
         onClick={() => setOpen(true)}
       >
         Offer to help
@@ -230,7 +239,7 @@ const RequestRowButton = ({ operatorId, complianceItemId, itemLabel }) => {
 // A general pitch at the operator as a whole, not tied to one regulation -
 // still useful for "we do all kinds of compliance work for operators like
 // you," kept alongside the per-regulation option above.
-const GeneralRequestButton = ({ operatorId }) => {
+const GeneralRequestButton = ({ operatorId, existingRequest, onSent }) => {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -244,6 +253,7 @@ const GeneralRequestButton = ({ operatorId }) => {
       await sendVendorRequest(operatorId, message);
       setSent(true);
       setOpen(false);
+      if (onSent) onSent();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -251,21 +261,9 @@ const GeneralRequestButton = ({ operatorId }) => {
     }
   };
 
-  if (sent)
-    return (
-      <span
-        style={{
-          fontSize: '13px',
-          fontWeight: 600,
-          color: '#3f6b52',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '4px',
-        }}
-      >
-        <span style={{ fontSize: '16px' }}>✓</span> Request sent
-      </span>
-    );
+  if (sent || existingRequest) {
+    return <ExistingRequestBadge status={existingRequest?.status || 'pending'} />;
+  }
 
   if (!open)
     return (
@@ -413,7 +411,7 @@ const GeneralRequestButton = ({ operatorId }) => {
 // A collapsed-by-default operator row: name + basic stats as a clickable
 // button, expanding to the full regulation table only when opened - keeps a
 // long operator list scannable instead of dumping every table at once.
-const OperatorCard = ({ op }) => {
+const OperatorCard = ({ op, requestsByItem, generalRequests, onRequestSent }) => {
   const [expanded, setExpanded] = useState(false);
 
   const pastDueCount = op.items.filter((it) => it.status === 'past_due').length;
@@ -751,6 +749,8 @@ const OperatorCard = ({ op }) => {
                             operatorId={op.operatorId}
                             complianceItemId={it.complianceItemId}
                             itemLabel={`${it.title} (${it.sourceRegulation})`}
+                            existingRequest={requestsByItem.get(String(it.complianceItemId))}
+                            onSent={onRequestSent}
                           />
                         </td>
                       </tr>
@@ -759,7 +759,11 @@ const OperatorCard = ({ op }) => {
                 </table>
               </div>
               <div style={{ marginTop: '4px' }}>
-                <GeneralRequestButton operatorId={op.operatorId} />
+                <GeneralRequestButton
+                  operatorId={op.operatorId}
+                  existingRequest={generalRequests.get(String(op.operatorId))}
+                  onSent={onRequestSent}
+                />
               </div>
             </>
           )}
@@ -771,19 +775,37 @@ const OperatorCard = ({ op }) => {
 
 const MarketplacePage = () => {
   const [operators, setOperators] = useState([]);
+  const [myRequests, setMyRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
-    getMarketplaceOperators()
-      .then((data) => {
-        setOperators(data.operators || []);
+    Promise.all([getMarketplaceOperators(), getVendorRequests()])
+      .then(([opData, reqData]) => {
+        setOperators(opData.operators || []);
+        setMyRequests((reqData.requests || []).filter((r) => r.initiatedBy === 'vendor'));
         setError('');
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(load, []);
+
+  // One request per (operator, regulation) pair going forward - upsert-free
+  // on the backend, so this just keeps the latest by createdAt if more than
+  // one somehow exists.
+  const requestsByItem = new Map();
+  const generalRequests = new Map();
+  myRequests.forEach((r) => {
+    const operatorKey = String(r.operatorId?._id || r.operatorId);
+    if (r.complianceItemId) {
+      requestsByItem.set(String(r.complianceItemId._id || r.complianceItemId), r);
+    } else if (!generalRequests.has(operatorKey)) {
+      generalRequests.set(operatorKey, r);
+    }
+  });
 
   return (
     <div>
@@ -872,7 +894,13 @@ const MarketplacePage = () => {
       )}
 
       {operators.map((op) => (
-        <OperatorCard key={op.operatorId} op={op} />
+        <OperatorCard
+          key={op.operatorId}
+          op={op}
+          requestsByItem={requestsByItem}
+          generalRequests={generalRequests}
+          onRequestSent={load}
+        />
       ))}
     </div>
   );

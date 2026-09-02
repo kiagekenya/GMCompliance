@@ -23,6 +23,19 @@ const connectionRequestSchema = new mongoose.Schema({
   message: { type: String, default: '' },
   status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
   respondedAt: { type: Date, default: null },
+
+  // Second handshake, only meaningful once status is 'accepted' AND
+  // complianceItemId is set (a specific-regulation offer, not a general
+  // inquiry) - see routes/vendorPortal/startCollaboration.js and
+  // routes/vendorDirectory/confirmCollaboration.js. 'accepted' only means
+  // the two sides are now connected (a Vendor contact record exists); it
+  // does NOT assign anyone to the regulation. The vendor confirming
+  // they're ready to start (collaborationRequestedAt), then the operator
+  // confirming back (collaborationConfirmedAt), is what actually sets
+  // ComplianceItem.assignedVendorId - same real assignment RequirementDetail
+  // uses for any other assignee, upload link included.
+  collaborationRequestedAt: { type: Date, default: null },
+  collaborationConfirmedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('ConnectionRequest', connectionRequestSchema);

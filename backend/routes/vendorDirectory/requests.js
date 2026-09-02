@@ -7,6 +7,8 @@
 
 const ConnectionRequest = require('../../models/ConnectionRequest');
 const VendorUser = require('../../models/VendorUser');
+const Operator = require('../../models/Operator');
+const { sendEmail } = require('../../services/emailService');
 const asyncHandler = require('../../utils/asyncHandler');
 const { acceptConnectionRequest } = require('../../utils/connectionRequests');
 
@@ -34,6 +36,25 @@ const createRequest = asyncHandler(async (req, res) => {
     initiatedBy: 'operator',
     message: message || '',
   });
+
+  if (vendorUser.email) {
+    const operator = await Operator.findById(req.operatorId);
+    const result = await sendEmail({
+      to: vendorUser.email,
+      subject: `${operator?.companyName || 'An operator'} wants to collaborate with you`,
+      text: `Hi ${vendorUser.fullName || ''},
+
+${operator?.companyName || 'An operator'} sent you a collaboration request on Galaxy Compliance Assistant:
+
+  "${message || '(no message)'}"
+
+Log in to your vendor portal and open REQUESTS to accept or decline.
+
+- Galaxy Compliance Assistant
+`,
+    });
+    console.log(`[vendor-directory] request email to ${vendorUser.email}: ${result.sent ? 'sent' : 'not sent (' + result.reason + ')'}`);
+  }
 
   res.status(201).json({ request });
 });

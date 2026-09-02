@@ -17,6 +17,7 @@ const saveProfile = require('./saveProfile');
 const getServiceCategories = require('./getServiceCategories');
 const getOperators = require('./getOperators');
 const { listRequests, createRequest, respondToRequest } = require('./requests');
+const startCollaboration = require('./startCollaboration');
 
 const taskUpload = createUploadMiddleware((req) => `items/${req.params.id}`);
 
@@ -36,5 +37,6 @@ router.get('/operators', getOperators);
 router.get('/requests', listRequests);
 router.post('/requests', createRequest);
 router.patch('/requests/:id', respondToRequest);
+router.post('/requests/:id/start-collaboration', startCollaboration);
 
 module.exports = router;

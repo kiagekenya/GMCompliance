@@ -8,7 +8,7 @@
 // backend/utils/connectionRequests.js.
 
 import React, { useState, useEffect } from 'react';
-import { getVendorRequests, respondToVendorRequest } from '../../api/client';
+import { getVendorRequests, respondToVendorRequest, startCollaboration } from '../../api/client';
 
 const STATUS_LABEL = {
   pending: 'Pending',
@@ -28,7 +28,73 @@ const formatDate = (dateString) =>
     day: 'numeric',
   });
 
-const RequestRow = ({ request, isReceived, onRespond }) => {
+// The "notification" for a vendor-sent, regulation-specific request the
+// operator has accepted: accepting only connects the two sides (see
+// backend/utils/connectionRequests.js) - it does NOT put the vendor on the
+// operator's calendar yet. Clicking here is what tells the operator
+// directly (an email, not just an in-app row - see
+// backend/routes/vendorPortal/startCollaboration.js) that this vendor is
+// ready to actually start, and is the trigger for the operator's own
+// CONFIRM COLLABORATION step that finishes the assignment.
+const CollaborationAction = ({ request, onStarted }) => {
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState('');
+
+  if (request.collaborationConfirmedAt) {
+    return (
+      <span style={{ fontSize: '11px', fontWeight: 600, color: '#3f6b52' }}>
+        ✓ Collaboration confirmed — check My Tasks
+      </span>
+    );
+  }
+
+  if (request.collaborationRequestedAt) {
+    return (
+      <span style={{ fontSize: '11px', fontWeight: 500, color: '#c98a1e' }}>
+        ⏳ Waiting for the operator to confirm collaboration
+      </span>
+    );
+  }
+
+  const handleStart = async () => {
+    setStarting(true);
+    setError('');
+    try {
+      await startCollaboration(request._id);
+      onStarted();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+      {error && <span style={{ fontSize: '11px', color: '#b91c1c' }}>⚠ {error}</span>}
+      <button
+        type="button"
+        onClick={handleStart}
+        disabled={starting}
+        style={{
+          padding: '6px 16px',
+          fontSize: '11px',
+          fontWeight: 700,
+          backgroundColor: '#3f6b52',
+          color: '#ffffff',
+          border: 'none',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          letterSpacing: '0.3px',
+        }}
+      >
+        {starting ? 'SENDING…' : '🎉 ACCEPTED — START COLLABORATING NOW'}
+      </button>
+    </div>
+  );
+};
+
+const RequestRow = ({ request, isReceived, onRespond, onStarted }) => {
   const [responding, setResponding] = useState(false);
   const companyName = request.operatorId?.companyName || 'Unknown operator';
   const regulation = request.complianceItemId?.requirementId;
@@ -243,7 +309,11 @@ const RequestRow = ({ request, isReceived, onRespond }) => {
           </span>
         )}
 
-        {!isReceived && (
+        {!isReceived && request.status === 'accepted' && request.complianceItemId && (
+          <CollaborationAction request={request} onStarted={onStarted} />
+        )}
+
+        {!isReceived && !(request.status === 'accepted' && request.complianceItemId) && (
           <span
             style={{
               fontSize: '11px',
@@ -537,6 +607,7 @@ const RequestsPage = () => {
                   request={r}
                   isReceived={false}
                   onRespond={handleRespond}
+                  onStarted={fetchRequests}
                 />
               ))}
             </div>

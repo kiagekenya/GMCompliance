@@ -14,7 +14,7 @@
 // compliance. See VENDOR_PORTAL.md for the full picture.
 
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import './VendorPortal.css';
 import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, getEvidenceBlobUrl, getVendorProfile, saveVendorProfile } from '../../api/client';
@@ -49,12 +49,24 @@ const STATUS_COLOR = {
 
 const VendorPortal = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [me, setMe] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [profile, setProfile] = useState(undefined); // undefined = not loaded yet, null = no profile set up
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Nothing else ever pushes a /vendor* URL - a vendor lands here straight
+  // from the role-choice/sign-in screen (still at "/" or "/sign-in"), which
+  // doesn't match any <Route> below, so <Routes> renders nothing and the
+  // page looks blank. This is what actually puts them on their task list.
+  useEffect(() => {
+    if (!location.pathname.startsWith('/vendor')) {
+      navigate('/vendor');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchAll = () => {
     setLoading(true);
@@ -86,20 +98,6 @@ const VendorPortal = () => {
     setMobileNavOpen(false);
     navigate(path);
   };
-
-  if (!loading && !error && profile === null) {
-    return (
-      <div className="vp-app">
-        <main className="vp-main" style={{ margin: '0 auto', maxWidth: 640 }}>
-          <h2>Welcome - set up your company profile</h2>
-          <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8, marginBottom: 16 }}>
-            This is what operators see when they view your profile, and what shows up when you browse operators to pitch your services. Takes a minute.
-          </p>
-          <VendorOnboarding profile={null} onSave={handleSaveProfile} submitLabel="GET STARTED" />
-        </main>
-      </div>
-    );
-  }
 
   const handleUploadEvidence = async (id, files) => {
     const updated = await uploadVendorEvidence(id, files);
