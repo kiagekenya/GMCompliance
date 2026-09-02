@@ -56,16 +56,23 @@ const complianceItemSchema = new mongoose.Schema({
   // recordCompletion so each new cycle starts back at the computed default.
   customReminderDates: { type: [Date], default: null },
 
-  // pending        = never yet completed. nextDueDate IS computed and shown
-  //                  from creation - only anchorDate/lastCompletedDate stay
-  //                  null until a real completion happens. This is the
-  //                  DEFAULT for every new item, and deliberately distinct
-  //                  from 'compliant' - due-date math is informational from
-  //                  day one, but the green "compliant" state has to be
-  //                  earned by an actual completion, never assumed.
-  // awaiting_input = reserved for operator_defined items missing a frequency
-  //                  (in practice this shouldn't occur - confirmItems.js
-  //                  validates the value exists before an item is ever created)
+  // awaiting_baseline = the DEFAULT for every new item with a known
+  //                  frequency. nextDueDate/actionWindowMonths are left
+  //                  null on purpose - no placeholder due date is ever
+  //                  shown, since a date counted from "whenever the
+  //                  calendar happened to be generated" is fake and
+  //                  confusing to a first-time user. Stays in this state
+  //                  until services/baselineScheduling.js's confirmBaseline
+  //                  runs (operator supplies the real last-completed date),
+  //                  which is what first populates nextDueDate for real.
+  // awaiting_input = frequency itself isn't even known yet (operator_defined
+  //                  requirement with no value supplied). Set the interval
+  //                  first (routes/complianceItems/setFrequency.js) - that
+  //                  moves it to awaiting_baseline, not straight to a date.
+  // pending        = legacy/manual states only now; nextDueDate IS present.
+  //                  Deliberately distinct from 'compliant' - due-date math
+  //                  can be shown once known, but the green "compliant"
+  //                  state has to be earned by an actual completion.
   // compliant      = Passive Window - completed at least once, not due soon
   // due            = Action Window - within actionWindowMonths of nextDueDate
   // started        = operator manually marked work in progress (holds until 'done')
@@ -74,8 +81,8 @@ const complianceItemSchema = new mongoose.Schema({
   // past_due       = nextDueDate has passed with no action
   status: {
     type: String,
-    enum: ['pending', 'awaiting_input', 'compliant', 'due', 'started', 'done', 'past_due'],
-    default: 'pending',
+    enum: ['pending', 'awaiting_input', 'awaiting_baseline', 'compliant', 'due', 'started', 'done', 'past_due'],
+    default: 'awaiting_baseline',
   },
 
   isRemoved: { type: Boolean, default: false }, // operator removed a non-core suggestion

@@ -14,25 +14,21 @@
 //   ]
 // }
 //
-// IMPORTANT: items are created with a real nextDueDate, computed immediately
-// from today - so the operator can see at a glance when each requirement is
-// next due, right from the moment the calendar is generated. What does NOT
-// happen automatically: anchorDate stays null (no "last completed" date
-// exists until a person sets one), and status can only ever land on
-// 'pending', 'due', or 'past_due' at creation time - NEVER 'compliant'.
-// 'compliant' is reserved exclusively for an item that has actually been
-// completed at least once (see dateMath.computeStatus's everCompleted flag).
-// This is the balance: due-date math is useful information from day one,
-// but the reassuring green "compliant" state has to be earned by a real
-// completion, never assumed.
+// IMPORTANT: items are created with NO due date at all - nextDueDate and
+// anchorDate both stay null, and status lands on 'awaiting_baseline' (or
+// 'awaiting_input' if the frequency itself isn't even known yet). A date
+// counted from "whenever INITIALIZE CALENDAR happened to be clicked" would
+// be fake - nobody actually completed every requirement today - so no
+// placeholder is shown at all. The operator supplies the real
+// last-completed date per item from Settings > Baseline last-completed
+// dates (see routes/complianceItems/baselineDate.js), which is what first
+// computes and confirms a real nextDueDate.
 //
 // This is also idempotent: upserts on (operatorId, requirementId,
 // frequencyVariantId) instead of blind insertMany, so calling this twice
 // (e.g. a returning user's browser re-running setup) updates the existing
 // items rather than creating duplicates. See the unique index on
 // ComplianceItem for the DB-level guarantee behind this.
-
-const { computeInitialSchedule } = require('../../services/schedulingEngine');
 
 const RegulatoryRequirement = require('../../models/RegulatoryRequirement');
 const ComplianceItem = require('../../models/ComplianceItem');
@@ -68,8 +64,6 @@ const confirmItems = asyncHandler(async (req, res) => {
     const isUnresolvedOperatorDefined = requirement.frequencyResolution === 'operator_defined'
       && !item.operatorDefinedFrequencyValue;
 
-    let nextDueDate = null;
-    let actionWindowMonths = null;
     let status = 'awaiting_input';
     let frequencyValue = null;
     let frequencyUnit = null;
@@ -83,12 +77,10 @@ const confirmItems = asyncHandler(async (req, res) => {
         || requirement.frequencyUnit
         || 'months';
 
-      // today is used ONLY as the reference point for "when's it next due" math -
-      // it is deliberately NOT stored as anchorDate/lastCompletedDate, since
-      // nothing has actually been completed yet.
-      ({ nextDueDate, actionWindowMonths, status } = computeInitialSchedule(
-        new Date(), frequencyValue, frequencyUnit, false
-      ));
+      // The frequency is known, but no due date is computed yet - that
+      // requires a real last-completed date, which nobody has supplied
+      // yet at creation time. See baselineScheduling.js.
+      status = 'awaiting_baseline';
     }
 
     upserts.push({
@@ -112,8 +104,8 @@ const confirmItems = asyncHandler(async (req, res) => {
             requiresOperatorInput: isUnresolvedOperatorDefined,
             operatorDefinedJustification: item.operatorDefinedJustification || null,
             anchorDate: null,
-            nextDueDate,
-            actionWindowMonths,
+            nextDueDate: null,
+            actionWindowMonths: null,
             status,
           },
         },

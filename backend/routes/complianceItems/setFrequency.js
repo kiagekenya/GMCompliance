@@ -5,9 +5,13 @@
 // 'operator_defined'), the item goes live from confirmItems.js flagged
 // 'awaiting_input' with no due date. This is where the operator supplies
 // their own interval, from the requirement's own page - not blocked during
-// setup. Once set, this recomputes the due date/status exactly the way
-// confirmItems.js does for every other item (same computeInitialSchedule
-// helper, anchor = today, everCompleted = whatever lastCompletedDate says).
+// setup. If this item was somehow already completed for real before its
+// frequency was known (lastCompletedDate already set), the due date is
+// recomputed from that real date immediately. Otherwise it moves to
+// 'awaiting_baseline', same as every other item at creation - no
+// placeholder due date counted from today; the operator still supplies a
+// real last-completed date via Settings > Baseline last-completed dates
+// (see services/baselineScheduling.js) before a due date appears.
 
 const { computeInitialSchedule } = require('../../services/schedulingEngine');
 const ComplianceItem = require('../../models/ComplianceItem');
@@ -25,14 +29,20 @@ const setFrequency = asyncHandler(async (req, res) => {
 
   item.resolvedFrequencyValue = Number(frequencyValue);
   item.resolvedFrequencyUnit = frequencyUnit || 'months';
+  item.requiresOperatorInput = false;
 
-  const everCompleted = Boolean(item.lastCompletedDate);
-  const { nextDueDate, actionWindowMonths, status } = computeInitialSchedule(
-    item.lastCompletedDate || new Date(), item.resolvedFrequencyValue, item.resolvedFrequencyUnit, everCompleted
-  );
-  item.nextDueDate = nextDueDate;
-  item.actionWindowMonths = actionWindowMonths;
-  item.status = status;
+  if (item.lastCompletedDate) {
+    const { nextDueDate, actionWindowMonths, status } = computeInitialSchedule(
+      item.lastCompletedDate, item.resolvedFrequencyValue, item.resolvedFrequencyUnit, true
+    );
+    item.nextDueDate = nextDueDate;
+    item.actionWindowMonths = actionWindowMonths;
+    item.status = status;
+  } else {
+    item.nextDueDate = null;
+    item.actionWindowMonths = null;
+    item.status = 'awaiting_baseline';
+  }
 
   await item.save();
   console.log(`[compliance-items] operator ${req.operatorId}: set frequency on item ${item._id} to ${item.resolvedFrequencyValue} ${item.resolvedFrequencyUnit}`);
