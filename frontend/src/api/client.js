@@ -80,6 +80,10 @@ export const updateVendorTask = (id, payload) => request(`/vendor-portal/tasks/$
 // (the operator hasn't set a baseline last-completed date) - see
 // backend/routes/vendorPortal/requestDueDate.js.
 export const requestDueDate = (id) => request(`/vendor-portal/tasks/${id}/request-due-date`, { method: 'POST' });
+// Explicit "send the whole thing to the operator" action - draft
+// notes/evidence saved along the way (updateVendorTask/uploadVendorEvidence
+// above) don't notify anyone until this is called.
+export const submitTaskForReview = (id) => request(`/vendor-portal/tasks/${id}/submit`, { method: 'POST' });
 export const uploadVendorEvidence = (id, files) => {
   const formData = new FormData();
   files.forEach((f) => formData.append('files', f));
@@ -129,6 +133,9 @@ export const getComplianceItems = () => request('/compliance-items');
 export const getArchive = () => request('/compliance-items/archive');
 export const updateComplianceItem = (id, payload) => request(`/compliance-items/${id}`, { method: 'PATCH', body: payload });
 export const completeComplianceItem = (id, payload) => request(`/compliance-items/${id}/complete`, { method: 'POST', body: payload });
+// The "not quite - fix this" alternative to MARK COMPLIANT - emails the
+// assignee (contact or vendor) with the comment and clears "needs review".
+export const requestItemChanges = (id, comment) => request(`/compliance-items/${id}/request-changes`, { method: 'POST', body: { comment } });
 export const setItemFrequency = (id, payload) => request(`/compliance-items/${id}/set-frequency`, { method: 'POST', body: payload });
 // Baseline last-completed date workflow (see backend/services/baselineScheduling.js):
 // propose stages a suggested nextDueDate for review; confirm makes it official;

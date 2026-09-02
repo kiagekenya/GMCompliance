@@ -19,6 +19,7 @@ const getOperators = require('./getOperators');
 const { listRequests, createRequest, respondToRequest } = require('./requests');
 const startCollaboration = require('./startCollaboration');
 const requestDueDate = require('./requestDueDate');
+const submitForReview = require('./submitForReview');
 
 const taskUpload = createUploadMiddleware((req) => `items/${req.params.id}`);
 
@@ -29,6 +30,7 @@ router.get('/tasks', getTasks);
 router.patch('/tasks/:id', updateTask);
 router.post('/tasks/:id/evidence', taskUpload.array('files'), uploadEvidence);
 router.post('/tasks/:id/request-due-date', requestDueDate);
+router.post('/tasks/:id/submit', submitForReview);
 
 // Marketplace: the vendor's own profile, the operator list with compliance
 // gaps, and the two-way connection-request inbox. See VENDOR_PORTAL.md.

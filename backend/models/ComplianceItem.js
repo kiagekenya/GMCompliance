@@ -122,6 +122,14 @@ const complianceItemSchema = new mongoose.Schema({
   pendingSubmittedByAssignee: { type: Boolean, default: false },
   pendingReviewedAt: { type: Date, default: null },
 
+  // The admin's "not quite - fix this" feedback on a reviewed-but-rejected
+  // submission (see routes/complianceItems/requestChanges.js) - emailed to
+  // the assignee directly and shown on their task page (vendor portal or
+  // the public upload link) until they resubmit, at which point
+  // submitForReview.js/submitUpload.js clear it back out for the new round.
+  reviewerComment: { type: String, default: '' },
+  reviewerCommentAt: { type: Date, default: null },
+
   lastCompletedDate: { type: Date, default: null },
   // Mixed, not a strict subdocument schema - see the comment on
   // pendingEvidenceUrls above for why (legacy string entries must not

@@ -17,7 +17,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import './VendorPortal.css';
-import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, getEvidenceBlobUrl, getVendorProfile, saveVendorProfile, requestDueDate, getVendorRequests } from '../../api/client';
+import { getVendorMe, getVendorTasks, updateVendorTask, uploadVendorEvidence, getEvidenceBlobUrl, getVendorProfile, saveVendorProfile, requestDueDate, getVendorRequests, submitTaskForReview } from '../../api/client';
 import VendorOnboarding from './VendorOnboarding';
 import MarketplacePage from './MarketplacePage';
 import RequestsPage from './RequestsPage';
@@ -123,6 +123,12 @@ const VendorPortal = () => {
     return updated;
   };
 
+  const handleSubmitForReview = async (id) => {
+    const updated = await submitTaskForReview(id);
+    fetchAll();
+    return updated;
+  };
+
   const handleSaveProfile = async (payload) => {
     await saveVendorProfile(payload);
     fetchAll();
@@ -214,7 +220,7 @@ const VendorPortal = () => {
     if (!task) {
       return <p>Loading task… (if this doesn't load, <button className="vp-link-btn" onClick={() => navigate('/vendor')}>go back</button>)</p>;
     }
-    return <VendorTaskDetail task={task} onBack={() => navigate('/vendor')} onUpdate={handleUpdateTask} onUploadEvidence={handleUploadEvidence} />;
+    return <VendorTaskDetail task={task} onBack={() => navigate('/vendor')} onUpdate={handleUpdateTask} onUploadEvidence={handleUploadEvidence} onSubmitForReview={handleSubmitForReview} />;
   };
 
   const ProfilePage = () => (
@@ -366,11 +372,12 @@ const DueDateStatus = ({ task }) => {
 
 // Task detail - evidence upload, notes, completion date. No MARK COMPLIANT
 // button by design; only an admin on the operator side does that.
-const VendorTaskDetail = ({ task, onBack, onUpdate, onUploadEvidence }) => {
+const VendorTaskDetail = ({ task, onBack, onUpdate, onUploadEvidence, onSubmitForReview }) => {
   const [notes, setNotes] = useState(task.pendingNotes || '');
   const [completedDate, setCompletedDate] = useState(task.pendingCompletedDate ? task.pendingCompletedDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
   const [savingNotes, setSavingNotes] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [viewingKey, setViewingKey] = useState(null);
   const [error, setError] = useState('');
 
@@ -415,6 +422,28 @@ const VendorTaskDetail = ({ task, onBack, onUpdate, onUploadEvidence }) => {
       setSavingNotes(false);
     }
   };
+
+  const handleSubmitForReview = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      await onSaveThenSubmit();
+    } catch (err) {
+      console.error('[VendorPortal] submit for review failed:', err);
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Notes/date are saved as part of the same click, so a vendor doesn't
+  // have to remember to hit SAVE first, then SUBMIT separately.
+  const onSaveThenSubmit = async () => {
+    await onUpdate(task._id, { pendingNotes: notes, completedDate });
+    await onSubmitForReview(task._id);
+  };
+
+  const alreadySubmitted = task.pendingSubmittedByAssignee && !task.reviewerComment;
 
   return (
   <div
@@ -525,6 +554,43 @@ const VendorTaskDetail = ({ task, onBack, onUpdate, onUploadEvidence }) => {
       <span style={{ color: '#dce1e8' }}>·</span>
       <DueDateStatus task={task} />
     </p>
+
+    {/* The operator reviewed a submission and asked for a fix - stays
+        visible until the next SUBMIT FOR REVIEW clears it (see
+        backend/routes/vendorPortal/submitForReview.js). */}
+    {task.reviewerComment && (
+      <div
+        style={{
+          backgroundColor: '#fef6f6',
+          borderRadius: '10px',
+          border: '1px solid #fad2d2',
+          padding: '12px 16px',
+          marginBottom: '16px',
+        }}
+      >
+        <div style={{ fontSize: '11px', fontWeight: 700, color: '#a23e2a', letterSpacing: '0.3px', marginBottom: '4px' }}>
+          ⚠ CHANGES REQUESTED{task.reviewerCommentAt ? ` · ${formatDate(task.reviewerCommentAt)}` : ''}
+        </div>
+        <p style={{ fontSize: '13px', color: '#2c3e50', margin: 0, lineHeight: 1.5 }}>{task.reviewerComment}</p>
+      </div>
+    )}
+
+    {alreadySubmitted && (
+      <div
+        style={{
+          backgroundColor: '#edf7f2',
+          borderRadius: '10px',
+          border: '1px solid #c6dfd4',
+          padding: '10px 16px',
+          marginBottom: '16px',
+          fontSize: '13px',
+          fontWeight: 600,
+          color: '#3f6b52',
+        }}
+      >
+        ✓ Submitted — waiting for the operator to review
+      </div>
+    )}
 
     {/* Timeline & reminders - same reminderCheckpoints the operator's own
         RequirementDetail.jsx shows, resolved server-side (see
@@ -918,19 +984,47 @@ const VendorTaskDetail = ({ task, onBack, onUpdate, onUploadEvidence }) => {
       </div>
     </div>
 
-    {/* Helper text */}
-    <p
+    {/* Attaching files and saving notes are both just drafts - nothing
+        notifies the operator until this is clicked (see
+        backend/routes/vendorPortal/submitForReview.js). */}
+    <div
       style={{
-        fontSize: '12px',
-        color: '#94a3b8',
-        margin: '0 0 16px 0',
-        lineHeight: '1.5',
-        paddingLeft: '4px',
+        backgroundColor: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #eef2f6',
+        padding: '16px 20px',
+        marginBottom: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        alignItems: 'flex-start',
       }}
     >
-      Submitting evidence notifies the admin for review — they'll mark this
-      compliant on their end once it checks out.
-    </p>
+      <button
+        type="button"
+        onClick={handleSubmitForReview}
+        disabled={submitting || (task.pendingEvidenceUrls || []).length === 0}
+        style={{
+          padding: '10px 28px',
+          fontSize: '13px',
+          fontWeight: 700,
+          backgroundColor: '#3f6b52',
+          color: '#ffffff',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          letterSpacing: '0.3px',
+          opacity: (task.pendingEvidenceUrls || []).length === 0 ? 0.5 : 1,
+        }}
+      >
+        {submitting ? 'SUBMITTING…' : alreadySubmitted ? 'RESUBMIT FOR REVIEW' : 'SUBMIT FOR REVIEW'}
+      </button>
+      <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, lineHeight: '1.5' }}>
+        {(task.pendingEvidenceUrls || []).length === 0
+          ? 'Attach at least one file above before you can submit.'
+          : "This sends everything above to the operator and emails them directly - they'll mark it compliant, or send back a note if something needs fixing."}
+      </p>
+    </div>
 
     {/* Last completed section */}
     {task.lastCompletedDate && (

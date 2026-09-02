@@ -13,7 +13,7 @@ import {
   listContacts, addContact, getArchive, listVendors, runStatusCheck,
   uploadEvidence, acknowledgeReview, getEvidenceBlobUrl,
   getVendorDirectory, getOperatorRequests, respondToOperatorRequest, addVendorFromDirectory,
-  updateVendor, deleteVendor, confirmCollaboration,
+  updateVendor, deleteVendor, confirmCollaboration, requestItemChanges,
 } from '../../api/client';
 
 // 'pending' is the honest default for a never-completed item.
@@ -52,6 +52,8 @@ const mapItemForDisplay = (item) => ({
   reminderCheckpoints: item.reminderCheckpoints || [],
   hasCustomReminderDates: Boolean(item.hasCustomReminderDates),
   needsReview: Boolean(item.pendingSubmittedByAssignee) && !item.pendingReviewedAt && (item.pendingEvidenceUrls || []).length > 0,
+  reviewerComment: item.reviewerComment || '',
+  reviewerCommentAt: item.reviewerCommentAt || null,
   assignedContactId: item.assignedContactId?._id || null,
   assignedContactName: item.assignedContactId?.fullName || null,
   assignedVendorId: item.assignedVendorId?._id || null,
@@ -853,6 +855,11 @@ const ComplianceDashboard = ({ configData }) => {
         console.log(`[Dashboard] set reminder dates on item ${id}`, updates.dates);
         fetchItems();
         return; // stay on the requirement page so the operator sees the updated schedule
+      } else if (updates.kind === 'requestChanges') {
+        await requestItemChanges(id, updates.comment);
+        console.log(`[Dashboard] requested changes on item ${id}`);
+        fetchItems();
+        return; // stay on the requirement page so the operator sees it clear from "needs review"
       }
     } catch (err) {
       console.error('[Dashboard] handleRequirementUpdate failed:', err);

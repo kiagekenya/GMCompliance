@@ -1,6 +1,6 @@
 // services/notificationService.js
 //
-// Three kinds of emails live here:
+// Four kinds of emails live here:
 //  1. Escalating monthly reminders while an item sits inside its action
 //     window (notifyReminderCheckpoint) - triggered from schedulingEngine's
 //     daily recalculation, once per calendar-month checkpoint (see
@@ -11,8 +11,15 @@
 //  3. Completion confirmation (notifyCompletion) - sent once, right after
 //     an item is marked compliant, telling the assignee the new due date
 //     and the reminder dates for the next cycle.
+//  4. Submission-for-review (notifySubmissionForReview) - sent to the
+//     OPERATOR (not the assignee) the moment an assignee submits evidence,
+//     whether through an authenticated vendor-portal session
+//     (routes/vendorPortal/submitForReview.js) or the unauthenticated
+//     public upload link (routes/public/submitUpload.js) - both call this
+//     same function so the email text never drifts between the two paths.
 
 const Contact = require('../models/Contact');
+const Operator = require('../models/Operator');
 const { sendEmail } = require('./emailService');
 
 async function notifyStatusTransition(item, requirement, newStatus) {
@@ -150,4 +157,33 @@ because this is now overdue.
   console.log(`[notifications] escalation to ${topContact.email} (level ${topContact.escalationLevel}) for item ${item._id}: ${result.sent ? 'sent' : 'not sent (' + result.reason + ')'}`);
 }
 
-module.exports = { notifyStatusTransition, notifyReminderCheckpoint, notifyCompletion };
+// The operator side of the "needs review" badge (models/ComplianceItem.js's
+// pendingSubmittedByAssignee) has always existed in-app, but nothing ever
+// emailed about it - this is that missing notification.
+async function notifySubmissionForReview(item, requirement, submitterName) {
+  const operator = await Operator.findById(item.operatorId);
+  if (!operator?.email) {
+    console.log(`[notifications] item ${item._id} submitted for review but operator has no email on file`);
+    return;
+  }
+
+  const result = await sendEmail({
+    to: operator.email,
+    subject: `Submitted for review: ${requirement?.title || 'a compliance task'}`,
+    text: `Hi,
+
+${submitterName || 'The assignee'} submitted evidence for:
+
+  ${requirement?.title || 'Requirement'}
+  ${requirement?.sourceRegulation || ''}
+
+Log in and open this regulation to review it - either MARK COMPLIANT, or
+send back a correction note if it's not ready yet.
+
+- Galaxy Compliance Assistant
+`,
+  });
+  console.log(`[notifications] submission-for-review email to ${operator.email}: ${result.sent ? 'sent' : 'not sent (' + result.reason + ')'}`);
+}
+
+module.exports = { notifyStatusTransition, notifyReminderCheckpoint, notifyCompletion, notifySubmissionForReview };

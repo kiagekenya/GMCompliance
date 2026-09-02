@@ -1,11 +1,13 @@
 // routes/vendorPortal/uploadEvidence.js
 // POST /api/vendor-portal/tasks/:id/evidence
-// Functionally the same action as the public upload link
-// (routes/public/submitUpload.js) - a vendor submitting evidence flags the
-// item for the admin's review (pendingSubmittedByAssignee), it never marks
-// anything compliant. The difference is this is a real authenticated
-// session instead of a one-off token, so a vendor can come back and see
-// everything they're assigned to in one place.
+// A DRAFT attach only - same as the admin's own direct attach
+// (routes/complianceItems/uploadEvidence.js), deliberately does NOT flag
+// pendingSubmittedByAssignee. A vendor with an authenticated session can
+// come back and add/remove files over multiple visits before they're ready;
+// only the explicit SUBMIT FOR REVIEW action (routes/vendorPortal/submitForReview.js)
+// actually notifies the operator. This is what used to notify on every
+// single file attach - moved out so "save this file" and "send the whole
+// thing to the operator" are two distinct, explicit actions.
 
 const path = require('path');
 const ComplianceItem = require('../../models/ComplianceItem');
@@ -28,8 +30,6 @@ const uploadEvidence = asyncHandler(async (req, res) => {
   if (item.pendingEvidenceUrls.length > 0 && !item.pendingCompletedDate) {
     item.pendingCompletedDate = new Date();
   }
-  item.pendingSubmittedByAssignee = true;
-  item.pendingReviewedAt = null;
   await item.save();
 
   console.log(`[vendor-portal] vendor ${req.vendorEmail}: attached ${newEntries.length} file(s) to task ${item._id}`);

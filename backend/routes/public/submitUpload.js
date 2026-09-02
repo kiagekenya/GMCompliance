@@ -12,15 +12,21 @@
 // routes/public/index.js) before this handler runs - req.files is the
 // array of saved files, each turned into a real evidence entry here. Also
 // flags pendingSubmittedByAssignee so the admin's dashboard shows a
-// "needs review" notification (see models/ComplianceItem.js).
+// "needs review" notification (see models/ComplianceItem.js), and emails
+// the operator directly (see notificationService.notifySubmissionForReview) -
+// the in-app badge alone was easy to miss.
 
 const path = require('path');
 const ComplianceItem = require('../../models/ComplianceItem');
+const RegulatoryRequirement = require('../../models/RegulatoryRequirement');
+const { notifySubmissionForReview } = require('../../services/notificationService');
 const asyncHandler = require('../../utils/asyncHandler');
 const { buildEvidenceEntry } = require('../../utils/evidenceStorage');
 
 const submitUpload = asyncHandler(async (req, res) => {
-  const item = await ComplianceItem.findOne({ uploadToken: req.params.token });
+  const item = await ComplianceItem.findOne({ uploadToken: req.params.token })
+    .populate('assignedContactId', 'fullName')
+    .populate('assignedVendorId', 'companyName personnelName');
 
   if (!item) {
     console.warn(`[public/upload] submit attempt with unknown/expired token: ${req.params.token}`);
@@ -42,13 +48,23 @@ const submitUpload = asyncHandler(async (req, res) => {
   item.pendingCompletedDate = req.body.completedDate ? new Date(req.body.completedDate) : new Date();
 
   // Every new submission (re)flags this for admin review, even if a
-  // previous submission was already reviewed.
+  // previous submission was already reviewed. A fresh round also clears
+  // out any earlier reviewer comment - it was about the last submission,
+  // not this new one.
   item.pendingSubmittedByAssignee = true;
   item.pendingReviewedAt = null;
+  item.reviewerComment = '';
+  item.reviewerCommentAt = null;
 
   await item.save();
 
   console.log(`[public/upload] ${newEntries.length} file(s) submitted for item ${item._id} via public link (${item.pendingEvidenceUrls.length} total)`);
+
+  const submitterName = item.assignedContactId?.fullName || item.assignedVendorId?.personnelName || item.assignedVendorId?.companyName;
+  const requirement = await RegulatoryRequirement.findById(item.requirementId);
+  notifySubmissionForReview(item, requirement, submitterName)
+    .catch((err) => console.error(`[public/upload] notifySubmissionForReview failed for item ${item._id}:`, err.message));
+
   res.json({ submitted: true, message: 'Thanks - your submission has been recorded. An admin will review it shortly.' });
 });
 

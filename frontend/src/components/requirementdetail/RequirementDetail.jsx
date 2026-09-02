@@ -194,6 +194,19 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
     onUpdate(requirement.id, { kind: 'complete' });
   };
 
+  const [changesComment, setChangesComment] = useState('');
+  const [sendingChanges, setSendingChanges] = useState(false);
+  const handleRequestChanges = async () => {
+    if (!changesComment.trim()) return;
+    setSendingChanges(true);
+    try {
+      await onUpdate(requirement.id, { kind: 'requestChanges', comment: changesComment.trim() });
+      setChangesComment('');
+    } finally {
+      setSendingChanges(false);
+    }
+  };
+
   const handleSaveFrequency = async () => {
     const value = Number(frequencyInput);
     if (!value || value <= 0) return;
@@ -278,7 +291,31 @@ const RequirementDetail = ({ requirement, onBack, onUpdate, onAddContact, onUplo
       {requirement.needsReview && (
         <div className="detail-card detail-banner detail-banner--attention">
           <div className="card-label">📎 Evidence uploaded by assignee</div>
-          <p>The assignee submitted evidence through their upload link - review it below, then MARK COMPLIANT once it checks out.</p>
+          <p>The assignee submitted evidence - review it below, then MARK COMPLIANT once it checks out, or send back a note if it's not ready.</p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8 }}>
+            <textarea
+              className="assignment-input"
+              placeholder="What needs to change before this can be marked compliant?"
+              value={changesComment}
+              onChange={(e) => setChangesComment(e.target.value)}
+              rows={2}
+              style={{ flex: 1, resize: 'vertical' }}
+            />
+            <button
+              className="action-button"
+              onClick={handleRequestChanges}
+              disabled={sendingChanges || !changesComment.trim()}
+            >
+              {sendingChanges ? 'SENDING…' : 'REQUEST CHANGES'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {requirement.reviewerComment && !requirement.needsReview && (
+        <div className="detail-card detail-banner detail-banner--warning">
+          <div className="card-label">⚠ You requested changes</div>
+          <p>"{requirement.reviewerComment}" — waiting on the assignee to fix and resubmit.</p>
         </div>
       )}
 
