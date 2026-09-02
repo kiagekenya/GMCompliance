@@ -184,17 +184,23 @@ function RoleRouter() {
 }
 
 function GatedApp() {
-  const [roleChoiceMade, setRoleChoiceMade] = useState(() => Boolean(sessionStorage.getItem(ROLE_CHOICE_KEY)));
+  // Tied to a real URL (not local state) specifically so the browser's back
+  // button works: choosing a role pushes a history entry for /sign-in, so
+  // back from there lands you back on the role-choice screen instead of
+  // skipping past it (nothing to go back TO when it was just a state flip).
+  const navigate = useNavigate();
+  const location = useLocation();
+  const showSignIn = location.pathname === '/sign-in';
 
   return (
     <div className="App">
       <SignedOut>
-        {roleChoiceMade ? (
+        {showSignIn ? (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
             <SignIn routing="virtual" />
           </div>
         ) : (
-          <RoleChoice onChoose={() => setRoleChoiceMade(true)} />
+          <RoleChoice onChoose={() => navigate('/sign-in')} />
         )}
       </SignedOut>
 
