@@ -119,6 +119,12 @@ export const getArchive = () => request('/compliance-items/archive');
 export const updateComplianceItem = (id, payload) => request(`/compliance-items/${id}`, { method: 'PATCH', body: payload });
 export const completeComplianceItem = (id, payload) => request(`/compliance-items/${id}/complete`, { method: 'POST', body: payload });
 export const setItemFrequency = (id, payload) => request(`/compliance-items/${id}/set-frequency`, { method: 'POST', body: payload });
+// Baseline last-completed date workflow (see backend/services/baselineScheduling.js):
+// propose stages a suggested nextDueDate for review; confirm makes it official;
+// clear discards a proposal without applying it.
+export const proposeBaselineDate = (id, lastCompletedDate) => request(`/compliance-items/${id}/baseline-date`, { method: 'POST', body: { lastCompletedDate } });
+export const confirmBaselineDate = (id) => request(`/compliance-items/${id}/baseline-date/confirm`, { method: 'POST' });
+export const clearBaselineDate = (id) => request(`/compliance-items/${id}/baseline-date`, { method: 'DELETE' });
 // dates: array of Date/ISO strings, or [] to reset back to the auto-computed schedule.
 export const setReminderDates = (id, dates) => request(`/compliance-items/${id}`, { method: 'PATCH', body: { customReminderDates: dates } });
 export const runStatusCheck = () => request('/compliance-items/run-status-check', { method: 'POST' });

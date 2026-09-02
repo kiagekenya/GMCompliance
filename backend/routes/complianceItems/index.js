@@ -14,6 +14,7 @@ const completeItem = require('./completeItem');
 const runStatusCheck = require('./runStatusCheck');
 const setFrequency = require('./setFrequency');
 const uploadEvidence = require('./uploadEvidence');
+const { proposeBaselineDate, confirmBaselineDate, clearBaselineDate } = require('./baselineDate');
 
 // Destination keyed by the compliance item id - req.operatorId is already
 // set by requireAuth (mounted below) by the time this runs.
@@ -27,6 +28,9 @@ router.post('/confirm', requireRole('admin', 'editor'), confirmItems);
 router.patch('/:id', requireRole('admin', 'editor'), updateItemStatus);
 router.post('/:id/complete', requireRole('admin', 'editor'), completeItem);
 router.post('/:id/set-frequency', requireRole('admin', 'editor'), setFrequency);
+router.post('/:id/baseline-date', requireRole('admin', 'editor'), proposeBaselineDate);
+router.post('/:id/baseline-date/confirm', requireRole('admin', 'editor'), confirmBaselineDate);
+router.delete('/:id/baseline-date', requireRole('admin', 'editor'), clearBaselineDate);
 router.post('/:id/evidence', requireRole('admin', 'editor'), itemUpload.array('files'), uploadEvidence);
 router.post('/run-status-check', requireRole('admin'), runStatusCheck);
 

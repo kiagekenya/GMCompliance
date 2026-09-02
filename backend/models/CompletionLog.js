@@ -18,6 +18,12 @@ const completionLogSchema = new mongoose.Schema({
   // loading any pre-existing string-only entry.
   evidenceUrls: { type: [mongoose.Schema.Types.Mixed], default: [] },
   notes: { type: String, default: '' },
+  // true only for entries written by services/baselineScheduling.js's
+  // confirmBaseline - an operator declaring "this was really last done on
+  // X" with no evidence attached, as opposed to a normal completion logged
+  // through the evidence-gated routes/complianceItems/completeItem.js flow.
+  // Lets the audit archive show which is which.
+  isBaseline: { type: Boolean, default: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('CompletionLog', completionLogSchema);

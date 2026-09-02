@@ -17,6 +17,7 @@ import {
   getProfile, saveProfile, updateContact, deleteContact, updateVendor, deleteVendor,
   getSuggestedRequirements, confirmComplianceItems,
 } from '../../api/client';
+import BaselineDates from './BaselineDates';
 
 const PROFILE_TOGGLES = [
   ['hasRegulatingStations', 'Pressure limiting / regulating stations?'],
@@ -296,6 +297,9 @@ const SettingsPage = ({ contacts = [], vendorList = [], onContactsChanged, onVen
           </div>
         </div>
       )}
+
+      {/* ---- Baseline last-completed dates ---- */}
+      <BaselineDates />
 
       {/* ---- Contacts ---- */}
       <div className="settings-section-label">Contacts</div>

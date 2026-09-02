@@ -26,6 +26,22 @@ const complianceItemSchema = new mongoose.Schema({
   nextDueDate: { type: Date, default: null },
   actionWindowMonths: { type: Number, default: null },
 
+  // Baseline date-setting workflow (see services/baselineScheduling.js).
+  // nextDueDate above starts out counted from "today" purely as a
+  // placeholder (see confirmItems.js) - it is NOT a claim that the
+  // requirement was actually done today. These fields hold an operator's
+  // proposed correction - "this was really last done on X" - and the
+  // due date that produces, staged here until the operator reviews and
+  // confirms it. Nothing on the live schedule (nextDueDate/status/
+  // anchorDate above) changes until confirmBaseline runs; confirming moves
+  // these values up and clears the four fields back to null.
+  baselineProposedLastCompletedDate: { type: Date, default: null },
+  baselineProposedNextDueDate: { type: Date, default: null },
+  baselineProposedActionWindowMonths: { type: Number, default: null },
+  baselineProposedStatus: { type: String, default: null },
+  baselineProposedAt: { type: Date, default: null }, // when the proposal was made, not confirmed
+  baselineConfirmedAt: { type: Date, default: null }, // when a baseline was last confirmed, if ever
+
   // Tracks which monthly reminder checkpoint (see utils/dateMath.js's
   // computeReminderCheckpoints) was last emailed, so the daily job in
   // schedulingEngine.js doesn't resend the same month's reminder every day
